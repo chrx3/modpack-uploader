@@ -9,9 +9,10 @@ if [ -n "$HTPASSWD_HASH" ]; then
 elif [ -f /data/.htpasswd ]; then
     echo "[entrypoint] using existing htpasswd"
 elif [ -n "$UPLOAD_USER" ] && [ -n "$UPLOAD_PASS" ]; then
-    HASH=$(htpasswd -nbm "$UPLOAD_USER" "$UPLOAD_PASS")
+    # -nbs = SHA-1 format (matches what the Python uploader_backend.py expects)
+    HASH=$(htpasswd -nbs "$UPLOAD_USER" "$UPLOAD_PASS")
     echo "$HASH" > /data/.htpasswd
-    echo "[entrypoint] htpasswd generated for user $UPLOAD_USER"
+    echo "[entrypoint] htpasswd generated for user $UPLOAD_USER (SHA format)"
 else
     echo "[entrypoint] ERROR: no HTPASSWD_HASH, no UPLOAD_PASS, no .htpasswd"
     exit 1

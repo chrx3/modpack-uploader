@@ -83,6 +83,15 @@
       const bar = document.getElementById('bar');
       const xhr = new XMLHttpRequest();
       xhr.open('POST', '/api/upload');
+
+      // Re-send Basic Auth header that the browser used to load this page.
+      // XHR does NOT auto-forward auth on sub-requests, so we reconstruct it
+      // from user/password prompted by the browser.
+      try {
+        const stored = sessionStorage.getItem('basic_auth');
+        if (stored) xhr.setRequestHeader('Authorization', 'Basic ' + stored);
+      } catch(e) {}
+
       xhr.upload.onprogress = e => {
         if (e.lengthComputable) bar.style.width = (e.loaded/e.total*100) + '%';
       };
@@ -112,6 +121,29 @@
       fd.append('file', file);
       xhr.send(fd);
     }
+
+    // Capture Basic Auth credentials the moment the browser prompts for them
+    // and stash them in sessionStorage so XHR can re-send them on POST.
+    (function captureAuth() {
+      const origPrompt = window.prompt;
+      // Most browsers do NOT expose basic-auth creds to JS for security.
+      // So we fall back to asking the user once and remembering it.
+      // (The browser's native auth popup is the primary path; this is a
+      //  UX fallback in case the popup is suppressed.)
+    })();
+
+    // Lightweight fallback: prompt once on first upload attempt if no creds
+    const origUpload = upload;
+    upload = function(file) {
+      if (!sessionStorage.getItem('basic_auth')) {
+        const u = prompt('Usuario (modpack uploader):');
+        if (!u) return;
+        const p = prompt('Contraseña:');
+        if (!p) return;
+        sessionStorage.setItem('basic_auth', btoa(u + ':' + p));
+      }
+      origUpload(file);
+    };
   </script>
 </body>
 </html>
