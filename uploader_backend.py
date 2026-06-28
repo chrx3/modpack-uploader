@@ -148,16 +148,49 @@ def upload():
 
     name = safe_filename(f.filename)
     dest = INCOMING / name
-
-    # Save atomically: write to .tmp then rename
     tmp = dest.with_suffix(dest.suffix + ".part")
+
+    # Save to .part first (needed to compute SHA before any dedupe check)
     f.save(tmp)
 
+    # Compute SHA256 of uploaded content
     sha = hashlib.sha256()
     with open(tmp, "rb") as r:
         for chunk in iter(lambda: r.read(65536), b""):
             sha.update(chunk)
     digest = sha.hexdigest()
+
+    # === Dedupe by SHA256 ===
+    seen = load_processed()
+    for prev_name, prev in seen.get("files", {}).items():
+        if prev.get("sha256") == digest:
+            tmp.unlink(missing_ok=True)
+            log.info(f"REJECTED DUPLICATE {name} (sha={digest[:12]} matches {prev_name})")
+            return jsonify({
+                "ok": False,
+                "error": "duplicate",
+                "existing_file": prev_name,
+                "received_at": prev.get("received_at"),
+                "message": f"this file was already uploaded as '{prev_name}'",
+            }), 409
+
+    # === Dedupe by filename ===
+    # If same filename + different content, suffix with -N so we keep history
+    if dest.exists():
+        stem = dest.stem
+        for n in range(2, 100):
+            candidate = INCOMING / f"{stem}-{n}.mrpack"
+            if not candidate.exists():
+                new_name = candidate.name
+                new_dest = candidate
+                new_tmp = new_dest.with_suffix(new_dest.suffix + ".part")
+                # Move the just-uploaded .part to the new path
+                shutil.move(str(tmp), str(new_tmp))
+                name = new_name
+                dest = new_dest
+                tmp = new_tmp
+                log.info(f"filename collision, renamed to {name}")
+                break
 
     info = detect_format(tmp)
     if not info["ok"]:
@@ -167,12 +200,23 @@ def upload():
     tmp.rename(dest)
     stat = dest.stat()
 
-    # Also copy to public files/ for immediate download (processor will rewrite metadata)
+    # === Copy to public files/ (with filename dedupe) ===
     public_dest = FILES / name
+    if public_dest.exists():
+        existing_sha = hashlib.sha256()
+        with open(public_dest, "rb") as r:
+            for chunk in iter(lambda: r.read(65536), b""):
+                existing_sha.update(chunk)
+        if existing_sha.hexdigest() != digest:
+            stem = public_dest.stem
+            for n in range(2, 100):
+                cand = FILES / f"{stem}-{n}.mrpack"
+                if not cand.exists():
+                    public_dest = cand
+                    break
     shutil.copy2(dest, public_dest)
 
     # Mark as seen (processor will pick up)
-    seen = load_processed()
     seen["files"][name] = {
         "received_at": datetime.utcnow().isoformat() + "Z",
         "size": stat.st_size,
