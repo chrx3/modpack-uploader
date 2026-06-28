@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Subir modpack · ChrisCraft</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #0e0f12; color: #e5e7eb;
+      min-height: 100vh; display: flex; flex-direction: column;
+      align-items: center; padding: 32px 16px;
+    }
+    .wrap { width: 100%; max-width: 560px; }
+    header { text-align: center; margin-bottom: 24px; }
+    h1 { font-size: 24px; color: #a7f3d0; }
+    .sub { color: #9ca3af; margin-top: 6px; font-size: 13px; }
+    .drop {
+      background: #18181b; border: 2px dashed #3f3f46; border-radius: 12px;
+      padding: 48px 24px; text-align: center; transition: all 0.15s;
+      cursor: pointer;
+    }
+    .drop.drag { border-color: #10b981; background: #0f2d24; }
+    .drop .icon { font-size: 48px; margin-bottom: 8px; }
+    .drop .hint { color: #9ca3af; font-size: 14px; }
+    .drop strong { color: #e5e7eb; }
+    input[type=file] { display: none; }
+    .status { margin-top: 20px; padding: 16px; border-radius: 8px; font-size: 14px; }
+    .status.ok { background: #064e3b; color: #d1fae5; }
+    .status.err { background: #7f1d1d; color: #fee2e2; }
+    .progress {
+      height: 6px; background: #27272a; border-radius: 3px;
+      margin-top: 10px; overflow: hidden;
+    }
+    .progress > div { height: 100%; background: #10b981; width: 0; transition: width 0.2s; }
+    .back { display: block; text-align: center; margin-top: 20px; color: #9ca3af; }
+    code { background: #27272a; padding: 2px 6px; border-radius: 4px; font-size: 12px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>⬆️ Subir modpack</h1>
+      <div class="sub">Arrastrá tu archivo <code>.mrpack</code> o hacé click</div>
+    </header>
+
+    <label class="drop" id="drop">
+      <div class="icon">📦</div>
+      <div><strong>Elegí un archivo</strong> o soltalo acá</div>
+      <div class="hint" style="margin-top:8px;">.mrpack · máximo 200 MB</div>
+      <input type="file" id="file" accept=".mrpack,.zip">
+    </label>
+
+    <div id="status"></div>
+
+    <a class="back" href="/">← Volver</a>
+  </div>
+
+  <script>
+    const drop = document.getElementById('drop');
+    const input = document.getElementById('file');
+    const status = document.getElementById('status');
+
+    ['dragenter', 'dragover'].forEach(e =>
+      drop.addEventListener(e, ev => { ev.preventDefault(); drop.classList.add('drag'); }));
+    ['dragleave', 'drop'].forEach(e =>
+      drop.addEventListener(e, ev => { ev.preventDefault(); drop.classList.remove('drag'); }));
+
+    drop.addEventListener('drop', ev => {
+      const f = ev.dataTransfer.files[0];
+      if (f) upload(f);
+    });
+
+    input.addEventListener('change', () => {
+      if (input.files[0]) upload(input.files[0]);
+    });
+
+    function upload(file) {
+      status.innerHTML = `
+        <div class="status"><strong>${file.name}</strong> · ${(file.size/1024/1024).toFixed(2)} MB
+        <div class="progress"><div id="bar"></div></div></div>`;
+      const bar = document.getElementById('bar');
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', '/api/upload');
+      xhr.upload.onprogress = e => {
+        if (e.lengthComputable) bar.style.width = (e.loaded/e.total*100) + '%';
+      };
+      xhr.onload = () => {
+        try {
+          const r = JSON.parse(xhr.responseText);
+          if (r.ok) {
+            status.innerHTML = `<div class="status ok">
+              ✅ Recibido <strong>${r.filename}</strong>
+              <br>Tamaño: ${(r.size/1024/1024).toFixed(2)} MB
+              <br>SHA256: <code>${r.sha256.slice(0,16)}…</code>
+              ${r.format.mc_version ? `<br>MC: <code>${r.format.mc_version}</code>` : ''}
+              ${r.format.loader ? ` · Loader: <code>${r.format.loader}</code>` : ''}
+              <br><br>📥 Link público: <a href="${r.download_url}" style="color:#a7f3d0">${r.download_url}</a>
+            </div>`;
+          } else {
+            status.innerHTML = `<div class="status err">❌ ${r.error || 'error desconocido'}</div>`;
+          }
+        } catch (e) {
+          status.innerHTML = `<div class="status err">❌ respuesta inválida: ${xhr.responseText.slice(0,200)}</div>`;
+        }
+      };
+      xhr.onerror = () => {
+        status.innerHTML = `<div class="status err">❌ error de red</div>`;
+      };
+      const fd = new FormData();
+      fd.append('file', file);
+      xhr.send(fd);
+    }
+  </script>
+</body>
+</html>
