@@ -12,8 +12,8 @@
       min-height: 100vh; display: flex; flex-direction: column;
       align-items: center; padding: 32px 16px;
     }
-    .wrap { width: 100%; max-width: 720px; }
-    header { text-align: center; margin-bottom: 32px; }
+    .wrap { width: 100%; max-width: 760px; }
+    header { text-align: center; margin-bottom: 28px; }
     h1 { font-size: 28px; font-weight: 700; color: #a7f3d0; }
     .sub { color: #9ca3af; margin-top: 6px; font-size: 14px; }
     .card {
@@ -22,23 +22,67 @@
     }
     .card h2 {
       font-size: 16px; font-weight: 600; margin-bottom: 14px;
-      color: #fbbf24;
+      color: #fbbf24; display: flex; align-items: center; justify-content: space-between;
     }
+    .card h2 .live-dot {
+      display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+      background: #10b981; margin-right: 6px;
+      animation: pulse 2s ease-in-out infinite;
+      vertical-align: middle;
+    }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+
     .empty { color: #6b7280; font-size: 14px; padding: 20px; text-align: center; }
+
+    /* filas de modpacks */
     ul.files { list-style: none; }
     ul.files li {
-      display: flex; justify-content: space-between; align-items: center;
-      padding: 12px 14px; background: #0f1014; border-radius: 8px;
-      margin-bottom: 8px; font-size: 14px;
+      display: flex; align-items: center; gap: 14px;
+      padding: 14px 16px; background: #0f1014; border-radius: 10px;
+      margin-bottom: 10px; font-size: 14px;
+      border: 1px solid transparent; transition: border-color .15s;
     }
-    .fname { color: #f3f4f6; font-family: 'SF Mono', Menlo, monospace; }
-    .fsize { color: #9ca3af; font-size: 12px; }
+    ul.files li:hover { border-color: #3f3f46; }
+    ul.files li.is-live {
+      border-color: #10b98133;
+      background: linear-gradient(90deg, #0f2d24 0%, #0f1014 40%);
+    }
+    .ver {
+      font-family: 'SF Mono', Menlo, monospace;
+      font-size: 16px; font-weight: 700; color: #f3f4f6;
+      min-width: 78px;
+    }
+    .meta {
+      flex: 1; display: flex; flex-wrap: wrap; gap: 6px 10px;
+      font-size: 12px; color: #9ca3af; align-items: center;
+    }
+    .chip {
+      display: inline-flex; align-items: center; gap: 4px;
+      padding: 3px 8px; background: #27272a; border-radius: 6px;
+      font-size: 11px; color: #d4d4d8;
+    }
+    .chip.mc { color: #fcd34d; }
+    .chip.mods { color: #a5b4fc; }
+    .chip.date { color: #9ca3af; }
+    .badge {
+      display: inline-flex; align-items: center; gap: 4px;
+      padding: 4px 9px; border-radius: 999px;
+      font-size: 11px; font-weight: 700; letter-spacing: .02em;
+      text-transform: uppercase;
+    }
+    .badge.live { background: #064e3b; color: #6ee7b7; }
+    .badge.pending { background: #422006; color: #fbbf24; }
+    .badge.failed { background: #7f1d1d; color: #fca5a5; }
+    .badge.archived { background: #27272a; color: #71717a; }
+
     a.dl {
-      display: inline-block; padding: 6px 14px;
+      display: inline-block; padding: 8px 14px;
       background: #10b981; color: #052e16;
       border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 13px;
+      white-space: nowrap;
     }
     a.dl:hover { background: #34d399; }
+
     .upload-btn {
       display: inline-block; padding: 12px 24px;
       background: #2563eb; color: white;
@@ -46,7 +90,10 @@
       transition: background 0.15s;
     }
     .upload-btn:hover { background: #3b82f6; }
-    .meta { font-size: 12px; color: #6b7280; margin-top: 16px; text-align: center; }
+
+    .footer { font-size: 12px; color: #6b7280; margin-top: 24px; text-align: center; }
+    .footer .links a { color: #9ca3af; text-decoration: none; margin: 0 6px; }
+    .footer .links a:hover { color: #a7f3d0; }
     code { background: #27272a; padding: 2px 6px; border-radius: 4px; font-size: 12px; }
   </style>
 </head>
@@ -58,7 +105,10 @@
     </header>
 
     <div class="card">
-      <h2>📦 Modpacks disponibles</h2>
+      <h2>
+        <span>📦 Modpacks disponibles</span>
+        <span style="font-size:12px;font-weight:400;color:#6b7280"><span class="live-dot"></span>actualiza cada 8s</span>
+      </h2>
       <div id="files">
         <div class="empty">Cargando…</div>
       </div>
@@ -68,42 +118,111 @@
       <a class="upload-btn" href="/upload/">⬆️ Subir nuevo modpack</a>
     </div>
 
-    <div class="meta">
-      Hermano, subís el <code>.mrpack</code>, yo lo proceso y se deploya al server.
+    <div class="footer">
+      <div class="links">
+        <a href="https://minecraft.chrsx3.com" target="_blank">🎮 Server</a> ·
+        <a href="https://discord.gg/chrsx3" target="_blank">💬 Discord</a> ·
+        <a href="/api/status" target="_blank">📊 Status JSON</a>
+      </div>
+      <div style="margin-top:8px;">Subís el <code>.mrpack</code>, yo lo proceso y se deploya al server.</div>
     </div>
   </div>
 
   <script>
     function humanSize(b) {
+      if (!b) return '';
       if (b < 1024) return b + ' B';
       if (b < 1024*1024) return (b/1024).toFixed(1) + ' KB';
       return (b/1024/1024).toFixed(2) + ' MB';
     }
+    function humanDate(iso) {
+      if (!iso) return '';
+      const d = new Date(iso);
+      if (isNaN(d.getTime())) return '';
+      const now = new Date();
+      const diffMs = now - d;
+      const mins = Math.floor(diffMs / 60000);
+      const hours = Math.floor(diffMs / 3600000);
+      const days = Math.floor(diffMs / 86400000);
+      if (mins < 1) return 'hace instantes';
+      if (mins < 60) return 'hace ' + mins + ' min';
+      if (hours < 24) return 'hace ' + hours + ' h';
+      if (days < 7) return 'hace ' + days + ' d';
+      return d.toLocaleDateString('es-CL', {day:'2-digit', month:'short'});
+    }
+    function escapeHtml(s) {
+      return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    }
+
     async function load() {
       try {
         const r = await fetch('/api/status');
         const j = await r.json();
         const target = document.getElementById('files');
-        const all = [...j.files_ready, ...j.incoming];
+
+        const processed = j.processed || {};
+        // orden: EN SERVER primero, luego pending, luego archivados por fecha desc
+        const all = [...(j.files_ready || []), ...(j.incoming || [])];
         if (!all.length) {
           target.innerHTML = '<div class="empty">No hay modpacks todavía. Subí el primero ↓</div>';
           return;
         }
-        const items = all.map(name => {
-          const info = (j.processed || {})[name] || {};
-          const status = info.status === 'pending' ? ' ⏳' : '';
-          return `<li>
-            <div>
-              <div class="fname">${name}${status}</div>
-              <div class="fsize">${info.size ? humanSize(info.size) : ''}</div>
+
+        const decorated = all.map(name => {
+          const info = processed[name] || {};
+          return { name, info, status: info.status || 'archived' };
+        });
+        // Encontrar el último "done" (el que está en server)
+        const latestDone = decorated
+          .filter(d => d.status === 'done')
+          .sort((a, b) => (b.info.finished_at || '').localeCompare(a.info.finished_at || ''))[0];
+        const latestName = latestDone ? latestDone.name : null;
+
+        // ordenar: live > pending > archivados (fecha desc)
+        decorated.sort((a, b) => {
+          const rank = (d) => {
+            if (d.name === latestName) return 0;
+            if (d.status === 'pending') return 1;
+            return 2;
+          };
+          const ra = rank(a), rb = rank(b);
+          if (ra !== rb) return ra - rb;
+          return (b.info.finished_at || '').localeCompare(a.info.finished_at || '');
+        });
+
+        const items = decorated.map(d => {
+          const info = d.info;
+          const fmt = info.info || {};
+          const isLive = d.name === latestName;
+          const isPending = d.status === 'pending';
+
+          let badge;
+          if (isLive)        badge = '<span class="badge live">⬤ En server</span>';
+          else if (isPending) badge = '<span class="badge pending">⏳ procesando</span>';
+          else if (d.status === 'failed') badge = '<span class="badge failed">✕ falló</span>';
+          else                            badge = '<span class="badge archived">archivado</span>';
+
+          const ver = escapeHtml(d.name.replace(/\.mrpack$/i, ''));
+          const mcChip = fmt.mc_version ? `<span class="chip mc">MC ${escapeHtml(fmt.mc_version)}</span>` : '';
+          const modsChip = fmt.files_in_zip ? `<span class="chip mods">⚙ ${fmt.files_in_zip} mods</span>` : '';
+          const sizeChip = info.size ? `<span class="chip">${humanSize(info.size)}</span>` : '';
+          const dateChip = info.finished_at ? `<span class="chip date">${humanDate(info.finished_at)}</span>` :
+                           (info.received_at ? `<span class="chip date">subido ${humanDate(info.received_at)}</span>` : '');
+
+          return `<li class="${isLive ? 'is-live' : ''}">
+            <div class="ver">${ver}</div>
+            <div class="meta">
+              ${badge}
+              ${mcChip}${modsChip}${sizeChip}${dateChip}
             </div>
-            <a class="dl" href="/files/${name}">Descargar</a>
+            <a class="dl" href="/files/${escapeHtml(d.name)}">Descargar</a>
           </li>`;
         }).join('');
+
         target.innerHTML = `<ul class="files">${items}</ul>`;
       } catch (e) {
         document.getElementById('files').innerHTML =
-          '<div class="empty">Error cargando: ' + e.message + '</div>';
+          '<div class="empty">Error cargando: ' + escapeHtml(e.message) + '</div>';
       }
     }
     load();
