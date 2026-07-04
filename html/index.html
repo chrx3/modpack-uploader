@@ -6,46 +6,111 @@
   <title>ChrisCraft · Modpacks</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #0e0f12;
+      --surface: #18181b;
+      --surface-2: #0f1014;
+      --border: #27272a;
+      --border-hover: #3f3f46;
+      --text: #e5e7eb;
+      --text-dim: #9ca3af;
+      --text-faint: #6b7280;
+      --accent: #a7f3d0;
+      --accent-2: #10b981;
+      --warn: #fbbf24;
+      --err: #fca5a5;
+    }
+    html, body { height: 100%; }
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      background: #0e0f12; color: #e5e7eb;
-      min-height: 100vh; display: flex; flex-direction: column;
-      align-items: center; padding: 32px 16px;
+      background: var(--bg); color: var(--text);
+      display: flex; flex-direction: column;
+      overflow: hidden;
     }
-    .wrap { width: 100%; max-width: 760px; }
-    header { text-align: center; margin-bottom: 28px; }
-    h1 { font-size: 28px; font-weight: 700; color: #a7f3d0; }
-    .sub { color: #9ca3af; margin-top: 6px; font-size: 14px; }
-    .card {
-      background: #18181b; border: 1px solid #27272a; border-radius: 12px;
-      padding: 24px; margin-bottom: 20px;
+
+    /* ===== Header (fijo arriba) ===== */
+    header {
+      flex: 0 0 auto;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 18px 28px; border-bottom: 1px solid var(--border);
+      background: var(--bg);
     }
-    .card h2 {
-      font-size: 16px; font-weight: 600; margin-bottom: 14px;
-      color: #fbbf24; display: flex; align-items: center; justify-content: space-between;
+    header .titles h1 {
+      font-size: 22px; font-weight: 700; color: var(--accent);
+      display: flex; align-items: center; gap: 10px;
     }
-    .card h2 .live-dot {
+    header .titles .sub {
+      color: var(--text-dim); margin-top: 4px; font-size: 13px;
+    }
+    .upload-btn {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 10px 18px;
+      background: var(--accent-2); color: #052e16;
+      border-radius: 8px; text-decoration: none; font-weight: 700; font-size: 14px;
+      white-space: nowrap; transition: background 0.15s;
+    }
+    .upload-btn:hover { background: #34d399; }
+
+    /* ===== Layout principal: lista a la izquierda + detalle a la derecha ===== */
+    main {
+      flex: 1 1 auto;
+      display: grid;
+      grid-template-columns: minmax(380px, 1fr) minmax(320px, 460px);
+      gap: 0;
+      min-height: 0;
+    }
+    .pane-list {
+      border-right: 1px solid var(--border);
+      display: flex; flex-direction: column;
+      min-height: 0;
+    }
+    .pane-list .pane-header {
+      flex: 0 0 auto;
+      padding: 16px 24px 12px;
+      display: flex; align-items: center; justify-content: space-between;
+      border-bottom: 1px solid var(--border);
+    }
+    .pane-list .pane-header h2 {
+      font-size: 13px; font-weight: 700;
+      text-transform: uppercase; letter-spacing: .08em;
+      color: var(--text-dim);
+      display: flex; align-items: center; gap: 8px;
+    }
+    .live-dot {
       display: inline-block; width: 8px; height: 8px; border-radius: 50%;
-      background: #10b981; margin-right: 6px;
+      background: var(--accent-2); margin-right: 2px;
       animation: pulse 2s ease-in-out infinite;
-      vertical-align: middle;
     }
     @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
 
-    .empty { color: #6b7280; font-size: 14px; padding: 20px; text-align: center; }
+    .scroll {
+      flex: 1 1 auto;
+      overflow-y: auto;
+      padding: 16px 24px 32px;
+    }
+    .scroll::-webkit-scrollbar { width: 8px; }
+    .scroll::-webkit-scrollbar-track { background: transparent; }
+    .scroll::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+    .scroll::-webkit-scrollbar-thumb:hover { background: var(--border-hover); }
 
-    /* filas de modpacks */
     ul.files { list-style: none; }
     ul.files li {
       display: flex; align-items: center; gap: 14px;
-      padding: 14px 16px; background: #0f1014; border-radius: 10px;
-      margin-bottom: 10px; font-size: 14px;
-      border: 1px solid transparent; transition: border-color .15s;
+      padding: 14px 16px; background: var(--surface-2);
+      border-radius: 10px; margin-bottom: 8px;
+      font-size: 14px;
+      border: 1px solid transparent;
+      cursor: pointer;
+      transition: border-color .15s, background .15s;
     }
-    ul.files li:hover { border-color: #3f3f46; }
+    ul.files li:hover { border-color: var(--border-hover); }
+    ul.files li.selected {
+      border-color: var(--accent-2);
+      background: linear-gradient(90deg, #0f2d24 0%, var(--surface-2) 60%);
+    }
     ul.files li.is-live {
       border-color: #10b98133;
-      background: linear-gradient(90deg, #0f2d24 0%, #0f1014 40%);
+      background: linear-gradient(90deg, #0f2d24 0%, var(--surface-2) 40%);
     }
     .ver {
       font-family: 'SF Mono', Menlo, monospace;
@@ -54,16 +119,15 @@
     }
     .meta {
       flex: 1; display: flex; flex-wrap: wrap; gap: 6px 10px;
-      font-size: 12px; color: #9ca3af; align-items: center;
+      font-size: 12px; color: var(--text-dim); align-items: center;
     }
     .chip {
       display: inline-flex; align-items: center; gap: 4px;
-      padding: 3px 8px; background: #27272a; border-radius: 6px;
+      padding: 3px 8px; background: var(--border); border-radius: 6px;
       font-size: 11px; color: #d4d4d8;
     }
     .chip.mc { color: #fcd34d; }
     .chip.mods { color: #a5b4fc; }
-    .chip.date { color: #9ca3af; }
     .badge {
       display: inline-flex; align-items: center; gap: 4px;
       padding: 4px 9px; border-radius: 999px;
@@ -71,64 +135,168 @@
       text-transform: uppercase;
     }
     .badge.live { background: #064e3b; color: #6ee7b7; }
-    .badge.pending { background: #422006; color: #fbbf24; }
-    .badge.failed { background: #7f1d1d; color: #fca5a5; }
-    .badge.archived { background: #27272a; color: #71717a; }
-
-    a.dl {
-      display: inline-block; padding: 8px 14px;
-      background: #10b981; color: #052e16;
-      border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 13px;
-      white-space: nowrap;
+    .badge.pending { background: #422006; color: var(--warn); }
+    .badge.failed { background: #7f1d1d; color: var(--err); }
+    .badge.archived { background: var(--border); color: #71717a; }
+    .empty {
+      color: var(--text-faint); font-size: 14px;
+      padding: 32px 20px; text-align: center;
     }
-    a.dl:hover { background: #34d399; }
 
-    .upload-btn {
-      display: inline-block; padding: 12px 24px;
-      background: #2563eb; color: white;
-      border-radius: 8px; text-decoration: none; font-weight: 600;
-      transition: background 0.15s;
+    /* ===== Panel detalle (derecha) ===== */
+    .pane-detail {
+      display: flex; flex-direction: column;
+      min-height: 0;
+      background: var(--surface);
     }
-    .upload-btn:hover { background: #3b82f6; }
+    .detail-empty {
+      flex: 1; display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      color: var(--text-faint); font-size: 14px; text-align: center;
+      padding: 40px;
+    }
+    .detail-empty .icon { font-size: 56px; margin-bottom: 12px; opacity: 0.5; }
+    .detail {
+      flex: 1; display: flex; flex-direction: column;
+      min-height: 0;
+    }
+    .detail-head {
+      flex: 0 0 auto;
+      padding: 20px 24px 16px;
+      border-bottom: 1px solid var(--border);
+    }
+    .detail-head .ver-big {
+      font-family: 'SF Mono', Menlo, monospace;
+      font-size: 28px; font-weight: 700; color: #f3f4f6;
+      display: flex; align-items: center; gap: 12px;
+    }
+    .detail-head .ver-big .badge { font-size: 12px; }
+    .detail-head .filename {
+      font-size: 12px; color: var(--text-faint);
+      margin-top: 6px; font-family: 'SF Mono', Menlo, monospace;
+      word-break: break-all;
+    }
+    .detail-body {
+      flex: 1 1 auto; overflow-y: auto;
+      padding: 20px 24px;
+    }
+    .detail-body::-webkit-scrollbar { width: 8px; }
+    .detail-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+    .detail-body::-webkit-scrollbar-thumb:hover { background: var(--border-hover); }
 
-    .footer { font-size: 12px; color: #6b7280; margin-top: 24px; text-align: center; }
-    .footer .links a { color: #9ca3af; text-decoration: none; margin: 0 6px; }
-    .footer .links a:hover { color: #a7f3d0; }
-    code { background: #27272a; padding: 2px 6px; border-radius: 4px; font-size: 12px; }
+    .field {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 12px 0;
+      border-bottom: 1px solid var(--border);
+      gap: 12px;
+    }
+    .field:last-child { border-bottom: 0; }
+    .field .label {
+      font-size: 12px; color: var(--text-dim);
+      text-transform: uppercase; letter-spacing: .05em;
+      font-weight: 600;
+    }
+    .field .value {
+      font-size: 13px; color: var(--text);
+      font-family: 'SF Mono', Menlo, monospace;
+      text-align: right; word-break: break-all;
+    }
+    .field .value.mono { font-family: 'SF Mono', Menlo, monospace; font-size: 12px; }
+    .field .value.text { font-family: inherit; }
+
+    .detail-foot {
+      flex: 0 0 auto;
+      padding: 16px 24px;
+      border-top: 1px solid var(--border);
+      display: flex; gap: 10px; flex-wrap: wrap;
+    }
+    .btn {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 10px 16px; border-radius: 6px;
+      font-size: 13px; font-weight: 600;
+      text-decoration: none;
+      border: 1px solid var(--border);
+      background: var(--surface-2); color: var(--text);
+      cursor: pointer; transition: all 0.15s;
+    }
+    .btn:hover { border-color: var(--border-hover); background: #15151a; }
+    .btn.primary { background: var(--accent-2); color: #052e16; border-color: transparent; }
+    .btn.primary:hover { background: #34d399; }
+
+    /* ===== Responsive: en pantallas chicas, ocultar panel detalle ===== */
+    @media (max-width: 900px) {
+      main { grid-template-columns: 1fr; }
+      .pane-detail { display: none; }
+      ul.files li.selected { border-color: var(--accent-2); }
+    }
+    @media (max-width: 600px) {
+      header { padding: 14px 16px; flex-direction: column; gap: 10px; align-items: stretch; }
+      .scroll { padding: 12px 16px 24px; }
+    }
+
+    .footer {
+      flex: 0 0 auto;
+      font-size: 12px; color: var(--text-faint);
+      padding: 10px 24px; border-top: 1px solid var(--border);
+      text-align: center;
+    }
+    .footer .links a { color: var(--text-dim); text-decoration: none; margin: 0 6px; }
+    .footer .links a:hover { color: var(--accent); }
+    code { background: var(--border); padding: 2px 6px; border-radius: 4px; font-size: 12px; }
   </style>
 </head>
 <body>
-  <div class="wrap">
-    <header>
+  <header>
+    <div class="titles">
       <h1>⛏️ ChrisCraft Modpacks</h1>
       <div class="sub">Modpacks para el server <code>minecraft.chrsx3.com</code></div>
-    </header>
+    </div>
+    <a class="upload-btn" href="/upload/">⬆️ Subir nuevo modpack</a>
+  </header>
 
-    <div class="card">
-      <h2>
-        <span>📦 Modpacks disponibles</span>
-        <span style="font-size:12px;font-weight:400;color:#6b7280"><span class="live-dot"></span>actualiza cada 8s</span>
-      </h2>
-      <div id="files">
-        <div class="empty">Cargando…</div>
+  <main>
+    <div class="pane-list">
+      <div class="pane-header">
+        <h2>📦 Modpacks disponibles</h2>
+        <span style="font-size:11px;color:var(--text-faint)"><span class="live-dot"></span>actualiza cada 8s</span>
+      </div>
+      <div class="scroll">
+        <div id="files"><div class="empty">Cargando…</div></div>
       </div>
     </div>
 
-    <div style="text-align:center; margin-top: 24px;">
-      <a class="upload-btn" href="/upload/">⬆️ Subir nuevo modpack</a>
-    </div>
-
-    <div class="footer">
-      <div class="links">
-        <a href="https://minecraft.chrsx3.com" target="_blank">🎮 Server</a> ·
-        <a href="https://discord.gg/chrsx3" target="_blank">💬 Discord</a> ·
-        <a href="/api/status" target="_blank">📊 Status JSON</a>
+    <div class="pane-detail" id="paneDetail">
+      <div class="detail-empty" id="detailEmpty">
+        <div class="icon">📦</div>
+        <div>Seleccioná un modpack de la lista</div>
+        <div style="margin-top:8px;font-size:12px;color:var(--text-faint)">Click en cualquier fila para ver detalles</div>
       </div>
-      <div style="margin-top:8px;">Subís el <code>.mrpack</code>, yo lo proceso y se deploya al server.</div>
+      <div class="detail" id="detail" style="display:none">
+        <div class="detail-head">
+          <div class="ver-big"><span id="dVer"></span><span id="dBadge"></span></div>
+          <div class="filename" id="dFilename"></div>
+        </div>
+        <div class="detail-body" id="dBody"></div>
+        <div class="detail-foot">
+          <a class="btn primary" id="dDl" href="#">⬇️ Descargar .mrpack</a>
+          <a class="btn" id="dCopy" href="#">📋 Copiar SHA256</a>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <div class="footer">
+    <div class="links">
+      <a href="https://minecraft.chrsx3.com" target="_blank">🎮 Server</a> ·
+      <a href="https://discord.gg/chrsx3" target="_blank">💬 Discord</a> ·
+      <a href="/api/status" target="_blank">📊 Status JSON</a>
     </div>
   </div>
 
   <script>
+    let DATA = [];
+    let SELECTED = null;
+
     function humanSize(b) {
       if (!b) return '';
       if (b < 1024) return b + ' B';
@@ -150,35 +318,127 @@
       if (days < 7) return 'hace ' + days + ' d';
       return d.toLocaleDateString('es-CL', {day:'2-digit', month:'short'});
     }
+    function fullDate(iso) {
+      if (!iso) return '—';
+      const d = new Date(iso);
+      if (isNaN(d.getTime())) return '—';
+      return d.toLocaleString('es-CL', {dateStyle: 'medium', timeStyle: 'short'});
+    }
     function escapeHtml(s) {
       return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    }
+
+    function badgeFor(d) {
+      if (d.isLive)        return '<span class="badge live">⬤ En server</span>';
+      if (d.status === 'pending') return '<span class="badge pending">⏳ procesando</span>';
+      if (d.status === 'failed')  return '<span class="badge failed">✕ falló</span>';
+      return '<span class="badge archived">archivado</span>';
+    }
+
+    function renderList() {
+      const target = document.getElementById('files');
+      if (!DATA.length) {
+        target.innerHTML = '<div class="empty">No hay modpacks todavía. Subí el primero →</div>';
+        return;
+      }
+      const items = DATA.map(d => {
+        const fmt = d.info.info || {};
+        const cls = [
+          d.isLive ? 'is-live' : '',
+          d.name === SELECTED ? 'selected' : ''
+        ].filter(Boolean).join(' ');
+        const mcChip = fmt.mc_version ? `<span class="chip mc">MC ${escapeHtml(fmt.mc_version)}</span>` : '';
+        const modsChip = fmt.files_in_zip ? `<span class="chip mods">⚙ ${fmt.files_in_zip} mods</span>` : '';
+        const sizeChip = d.info.size ? `<span class="chip">${humanSize(d.info.size)}</span>` : '';
+        const dateChip = d.info.finished_at ? `<span class="chip">${humanDate(d.info.finished_at)}</span>` :
+                         (d.info.received_at ? `<span class="chip">subido ${humanDate(d.info.received_at)}</span>` : '');
+        return `<li class="${cls}" data-name="${escapeHtml(d.name)}">
+          <div class="ver">${escapeHtml(d.name.replace(/\.mrpack$/i, ''))}</div>
+          <div class="meta">
+            ${badgeFor(d)}
+            ${mcChip}${modsChip}${sizeChip}${dateChip}
+          </div>
+        </li>`;
+      }).join('');
+      target.innerHTML = `<ul class="files">${items}</ul>`;
+
+      target.querySelectorAll('li').forEach(li => {
+        li.addEventListener('click', () => {
+          SELECTED = li.dataset.name;
+          renderList();
+          renderDetail();
+        });
+      });
+    }
+
+    function renderDetail() {
+      const empty = document.getElementById('detailEmpty');
+      const detail = document.getElementById('detail');
+      if (!SELECTED) {
+        empty.style.display = 'flex';
+        detail.style.display = 'none';
+        return;
+      }
+      const d = DATA.find(x => x.name === SELECTED);
+      if (!d) {
+        empty.style.display = 'flex';
+        detail.style.display = 'none';
+        return;
+      }
+      const fmt = d.info.info || {};
+      empty.style.display = 'none';
+      detail.style.display = 'flex';
+
+      document.getElementById('dVer').textContent = d.name.replace(/\.mrpack$/i, '');
+      document.getElementById('dBadge').innerHTML = badgeFor(d);
+      document.getElementById('dFilename').textContent = d.name;
+
+      const fields = [
+        ['Estado', badgeFor(d).replace(/<span class="badge ([^"]+)">([^<]+)<\/span>/, '$2'), 'text'],
+        ['Minecraft', fmt.mc_version || '—', 'mono'],
+        ['Loader', fmt.loader ? fmt.loader.toUpperCase() : '—', 'mono'],
+        ['Mods', fmt.files_in_zip != null ? fmt.files_in_zip + ' archivos' : '—', 'mono'],
+        ['Tamaño', humanSize(d.info.size) || '—', 'mono'],
+        ['SHA256', d.info.sha256 || '—', 'mono'],
+        ['Recibido', fullDate(d.info.received_at), 'text'],
+        ['Procesado', fullDate(d.info.finished_at), 'text'],
+        ['Server', fullDate(d.info.deployed_at || d.info.server_started_at), 'text'],
+      ];
+      const body = document.getElementById('dBody');
+      body.innerHTML = fields.map(([label, value, cls]) =>
+        `<div class="field"><div class="label">${escapeHtml(label)}</div><div class="value ${cls}">${value}</div></div>`
+      ).join('');
+
+      const dl = document.getElementById('dDl');
+      dl.href = '/files/' + encodeURIComponent(d.name);
+
+      const copy = document.getElementById('dCopy');
+      copy.onclick = (e) => {
+        e.preventDefault();
+        if (!d.info.sha256) return;
+        navigator.clipboard.writeText(d.info.sha256).then(() => {
+          const orig = copy.textContent;
+          copy.textContent = '✓ Copiado';
+          setTimeout(() => { copy.textContent = orig; }, 1200);
+        });
+      };
     }
 
     async function load() {
       try {
         const r = await fetch('/api/status');
         const j = await r.json();
-        const target = document.getElementById('files');
-
         const processed = j.processed || {};
-        // orden: EN SERVER primero, luego pending, luego archivados por fecha desc
         const all = [...(j.files_ready || []), ...(j.incoming || [])];
-        if (!all.length) {
-          target.innerHTML = '<div class="empty">No hay modpacks todavía. Subí el primero ↓</div>';
-          return;
-        }
-
         const decorated = all.map(name => {
           const info = processed[name] || {};
           return { name, info, status: info.status || 'archived' };
         });
-        // Encontrar el último "done" (el que está en server)
         const latestDone = decorated
           .filter(d => d.status === 'done')
           .sort((a, b) => (b.info.finished_at || '').localeCompare(a.info.finished_at || ''))[0];
         const latestName = latestDone ? latestDone.name : null;
-
-        // ordenar: live > pending > archivados (fecha desc)
+        decorated.forEach(d => { d.isLive = d.name === latestName; });
         decorated.sort((a, b) => {
           const rank = (d) => {
             if (d.name === latestName) return 0;
@@ -189,37 +449,13 @@
           if (ra !== rb) return ra - rb;
           return (b.info.finished_at || '').localeCompare(a.info.finished_at || '');
         });
-
-        const items = decorated.map(d => {
-          const info = d.info;
-          const fmt = info.info || {};
-          const isLive = d.name === latestName;
-          const isPending = d.status === 'pending';
-
-          let badge;
-          if (isLive)        badge = '<span class="badge live">⬤ En server</span>';
-          else if (isPending) badge = '<span class="badge pending">⏳ procesando</span>';
-          else if (d.status === 'failed') badge = '<span class="badge failed">✕ falló</span>';
-          else                            badge = '<span class="badge archived">archivado</span>';
-
-          const ver = escapeHtml(d.name.replace(/\.mrpack$/i, ''));
-          const mcChip = fmt.mc_version ? `<span class="chip mc">MC ${escapeHtml(fmt.mc_version)}</span>` : '';
-          const modsChip = fmt.files_in_zip ? `<span class="chip mods">⚙ ${fmt.files_in_zip} mods</span>` : '';
-          const sizeChip = info.size ? `<span class="chip">${humanSize(info.size)}</span>` : '';
-          const dateChip = info.finished_at ? `<span class="chip date">${humanDate(info.finished_at)}</span>` :
-                           (info.received_at ? `<span class="chip date">subido ${humanDate(info.received_at)}</span>` : '');
-
-          return `<li class="${isLive ? 'is-live' : ''}">
-            <div class="ver">${ver}</div>
-            <div class="meta">
-              ${badge}
-              ${mcChip}${modsChip}${sizeChip}${dateChip}
-            </div>
-            <a class="dl" href="/files/${escapeHtml(d.name)}">Descargar</a>
-          </li>`;
-        }).join('');
-
-        target.innerHTML = `<ul class="files">${items}</ul>`;
+        DATA = decorated;
+        // Mantener selección si todavía existe, si no seleccionar el live
+        if (!DATA.find(d => d.name === SELECTED)) {
+          SELECTED = latestName || (DATA[0] && DATA[0].name) || null;
+        }
+        renderList();
+        renderDetail();
       } catch (e) {
         document.getElementById('files').innerHTML =
           '<div class="empty">Error cargando: ' + escapeHtml(e.message) + '</div>';
