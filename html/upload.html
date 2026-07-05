@@ -108,23 +108,11 @@
     const userInput = document.getElementById('userInput');
     const passInput = document.getElementById('passInput');
 
-    // Detectar si el browser YA cargó con Basic Auth nativo (popup previo).
-    // Si carga OK sin prompt nativo, fetch contra /api/status con creds nativos
-    // funciona; en ese caso auto-llenamos el form con valores dummy.
-    function checkBrowserAuth() {
-      fetch('/api/status', { credentials: 'include' }).then(r => {
-        if (r.ok) {
-          // El browser ya tiene Basic Auth (popup nativo) → habilitar upload
-          // sin pedir creds en el form.
-          unlock();
-          userInput.value = '__browser_auth__';
-          passInput.value = '__browser_auth__';
-          userInput.disabled = true;
-          passInput.disabled = true;
-        }
-      }).catch(() => {});
-    }
-
+    // Auth: SIEMPRE pedimos user/pass en el form (no dependemos del popup nativo).
+    // Razón: el browser NO re-envía creds Basic Auth en XHR POST — solo en
+    // top-level navigations. Si dejábamos que el popup nativo fuera suficiente,
+    // el XHR mandaba sin Authorization y el server respondía 401 (visto como
+    // "error de red" en el onerror del XHR).
     function getCreds() {
       const stored = sessionStorage.getItem('basic_auth');
       if (!stored) return null;
@@ -134,7 +122,7 @@
         if (i < 0) return null;
         const u = decoded.slice(0, i);
         const p = decoded.slice(i + 1);
-        if (u === '__browser_auth__') return 'browser'; // sentinel: usar auth nativo
+        if (!u || !p) return null;
         return { u, p };
       } catch(e) { return null; }
     }
@@ -164,6 +152,14 @@
     }
     userInput.addEventListener('input', updateAuth);
     passInput.addEventListener('input', updateAuth);
+
+    // Si ya hay creds guardadas en sessionStorage, auto-llenar y unlock.
+    const existing = getCreds();
+    if (existing) {
+      userInput.value = existing.u;
+      passInput.value = existing.p;
+      unlock();
+    }
 
     ['dragenter', 'dragover'].forEach(e =>
       drop.addEventListener(e, ev => { ev.preventDefault(); if (!drop.classList.contains('disabled')) drop.classList.add('drag'); }));
@@ -200,11 +196,12 @@
       xhr.open('POST', '/api/upload');
 
       const creds = getCreds();
-      if (creds && creds !== 'browser') {
-        xhr.setRequestHeader('Authorization', 'Basic ' + btoa(creds.u + ':' + creds.p));
+      if (!creds) {
+        status.innerHTML = `<div class="status err">❌ no hay credenciales cargadas</div>`;
+        lock();
+        return;
       }
-      // Si creds === 'browser', NO seteamos Authorization header → el browser
-      // re-enviará las creds nativas del popup automáticamente.
+      xhr.setRequestHeader('Authorization', 'Basic ' + btoa(creds.u + ':' + creds.p));
 
       xhr.upload.onprogress = e => {
         if (e.lengthComputable) {
@@ -255,7 +252,6 @@
 
     // Inicializar: si ya hay creds en sessionStorage, desbloquear
     if (getCreds()) unlock();
-    checkBrowserAuth();
   </script>
 </body>
 </html>
