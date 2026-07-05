@@ -429,7 +429,7 @@
         const r = await fetch('/api/status');
         const j = await r.json();
         const processed = j.processed || {};
-        const all = [...(j.files_ready || []), ...(j.incoming || [])];
+        const all = [...(j.files_ready || [])];
         const decorated = all.map(name => {
           const info = processed[name] || {};
           return { name, info, status: info.status || 'archived' };
