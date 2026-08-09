@@ -373,6 +373,77 @@ def panel_action():
         return jsonify({"ok": False, "error": str(exc)}), 503
 
 
+@app.route("/api/panel/upload", methods=["POST"])
+def panel_upload():
+    """Upload a .mrpack straight onto a lab profile.
+
+    Deliberately NOT the same path as /api/upload: that one drops the file in
+    /data/incoming, where the cron picks it up and deploys it to the main
+    server. Here the file only lands in /data/files (so it stays downloadable
+    and reusable) and the profile's MODPACK is pointed at it. The main server
+    is left alone.
+    """
+    if not check_panel_auth():
+        log.warning(f"REJECTED panel upload from {request.remote_addr}: bad token")
+        return jsonify({"ok": False, "error": "unauthorized"}), 401
+
+    profile = str(request.form.get("profile", ""))
+    if not PROFILE_RE.match(profile) or profile == "main":
+        return jsonify({"ok": False, "error": "perfil invalido"}), 400
+
+    if "file" not in request.files:
+        return jsonify({"ok": False, "error": "no llego ningun archivo"}), 400
+    f = request.files["file"]
+    if not f.filename:
+        return jsonify({"ok": False, "error": "nombre de archivo vacio"}), 400
+
+    name = safe_filename(f.filename)
+    dest = FILES / name
+    tmp = dest.with_suffix(dest.suffix + ".part")
+    f.save(tmp)
+
+    info = detect_format(tmp)
+    if not info["ok"]:
+        tmp.unlink(missing_ok=True)
+        return jsonify({"ok": False, "error": info["error"]}), 400
+
+    # Mismo nombre y contenido distinto: se conserva el anterior
+    if dest.exists():
+        old = hashlib.sha256(dest.read_bytes()).hexdigest()
+        new = hashlib.sha256(tmp.read_bytes()).hexdigest()
+        if old != new:
+            stem = dest.stem
+            for n in range(2, 100):
+                cand = FILES / f"{stem}-{n}.mrpack"
+                if not cand.exists():
+                    dest = cand
+                    name = cand.name
+                    break
+    tmp.replace(dest)
+
+    url = f"{request.headers.get('X-Forwarded-Proto', 'https')}://" \
+          f"{request.headers.get('X-Forwarded-Host', request.host)}/files/{name}"
+
+    log.info(f"PANEL upload {name} ({dest.stat().st_size} bytes) -> perfil {profile}")
+    try:
+        res = agent_call({"op": "set", "profile": profile,
+                          "changes": {"MODPACK": url}})
+    except Exception as exc:
+        log.error(f"panel upload set: {exc}")
+        return jsonify({"ok": False, "error": str(exc)}), 503
+
+    if not res.get("ok"):
+        return jsonify(res), 400
+    return jsonify({
+        "ok": True,
+        "filename": name,
+        "url": url,
+        "size": dest.stat().st_size,
+        "mc_version": info.get("mc_version"),
+        "needs_restart": res.get("needs_restart", False),
+    })
+
+
 @app.route("/health")
 def health():
     return "ok", 200

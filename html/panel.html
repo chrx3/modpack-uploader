@@ -126,6 +126,23 @@
     .field.check label { font-size: 13px; color: var(--text); }
     .field.wide { grid-column: 1 / -1; }
 
+    .custom-url { margin-top: 8px; }
+    .upload-row {
+      display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+      margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--border);
+    }
+    .upload-row input[type=file] {
+      font-size: 12px; color: var(--text-dim); max-width: 100%;
+    }
+    .upload-row input[type=file]::file-selector-button {
+      font-family: inherit; font-size: 12px; font-weight: 600;
+      padding: 7px 12px; margin-right: 10px; cursor: pointer;
+      background: transparent; color: var(--text);
+      border: 1px solid var(--border-hover); border-radius: 7px;
+    }
+    .upload-row input[type=file]::file-selector-button:hover { background: #27272a; }
+    .upload-row button { padding: 7px 12px; }
+
     .extra-row { display: flex; gap: 8px; margin-bottom: 8px; align-items: center; }
     .extra-row input { flex: 1; }
     .extra-row input.k { max-width: 200px; text-transform: uppercase; }
@@ -359,6 +376,7 @@
 
     // Modpacks ya publicados en esta misma página, para elegirlos sin copiar URLs
     const PACK_BASE = location.origin + '/files/';
+    const CUSTOM = '__custom__';   // opción "otra URL…" del select de modpack
     let MODPACKS = [];
     async function loadModpacks() {
       try {
@@ -443,22 +461,19 @@
         input.type = 'checkbox';
         input.checked = String(value).toLowerCase() === 'true';
       } else if (f.type === 'modpack') {
-        // input + datalist: se elige de la lista publicada o se pega una URL
-        input = document.createElement('input');
-        input.type = 'text';
-        input.value = value;
-        input.placeholder = 'ninguno — versión y loader mandan';
-        const listId = 'packs-' + Math.random().toString(36).slice(2, 9);
-        input.setAttribute('list', listId);
-        const dl = document.createElement('datalist');
-        dl.id = listId;
-        for (const name of MODPACKS) {
+        input = document.createElement('select');
+        const known = new Set();
+        const add = (val, text) => {
           const o = document.createElement('option');
-          o.value = PACK_BASE + name;
-          o.label = name;
-          dl.appendChild(o);
-        }
-        wrap.appendChild(dl);
+          o.value = val; o.textContent = text;
+          input.appendChild(o); known.add(val);
+        };
+        add('', '(ninguno) — mandan versión y loader');
+        for (const n of MODPACKS) add(PACK_BASE + n, n);
+        // Una URL guardada que no esté entre los publicados
+        if (value && !known.has(value)) add(value, value.split('/').pop() + ' (externo)');
+        add(CUSTOM, 'otra URL…');
+        input.value = value || '';
       } else {
         input = document.createElement('input');
         input.type = f.type === 'number' ? 'number' : 'text';
@@ -474,6 +489,21 @@
       else {
         wrap.appendChild(label);
         wrap.appendChild(input);
+
+        if (f.type === 'modpack') {
+          // Campo para pegar una URL, visible solo al elegir "otra URL…"
+          const custom = document.createElement('input');
+          custom.type = 'text';
+          custom.className = 'custom-url hidden';
+          custom.placeholder = 'https://…/algo.mrpack';
+          input.addEventListener('change', () => {
+            custom.classList.toggle('hidden', input.value !== CUSTOM);
+            if (input.value === CUSTOM) custom.focus();
+          });
+          wrap.appendChild(custom);
+          wrap.appendChild(buildUploader(input));
+        }
+
         if (f.hint) {
           const hint = document.createElement('div');
           hint.className = 'hint';
@@ -482,6 +512,75 @@
         }
       }
       return wrap;
+    }
+
+    function buildUploader(select) {
+      const row = document.createElement('div');
+      row.className = 'upload-row';
+
+      const file = document.createElement('input');
+      file.type = 'file';
+      file.accept = '.mrpack,application/zip';
+
+      const btn = document.createElement('button');
+      btn.textContent = '⬆ Subir a este perfil';
+      btn.disabled = true;
+
+      const state = document.createElement('span');
+      state.className = 'note';
+
+      file.onchange = () => {
+        btn.disabled = !file.files.length;
+        state.textContent = file.files.length
+          ? humanSize(file.files[0].size) : '';
+      };
+
+      btn.onclick = async () => {
+        if (!file.files.length) return;
+        const profile = row.closest('.settings').dataset.profile;
+        const fd = new FormData();
+        fd.append('profile', profile);
+        fd.append('file', file.files[0]);
+
+        btn.disabled = true;
+        state.textContent = 'subiendo…';
+        try {
+          // Sin Content-Type: el navegador pone el boundary del multipart
+          const r = await fetch('/api/panel/upload', {
+            method: 'POST',
+            headers: { 'X-Panel-Token': token },
+            body: fd,
+          });
+          const d = await r.json();
+          if (!d.ok) { state.textContent = ''; showMsg(d.error || 'no se pudo subir', 'err'); btn.disabled = false; return; }
+          state.textContent = '✓ ' + d.filename;
+          await loadModpacks();
+          // Añadir y seleccionar el recién subido sin repintar el formulario
+          if (![...select.options].some(o => o.value === d.url)) {
+            const o = document.createElement('option');
+            o.value = d.url; o.textContent = d.filename;
+            select.insertBefore(o, select.options[select.options.length - 1]);
+          }
+          select.value = d.url;
+          showMsg(`Subido y asignado al perfil${d.mc_version ? ' (MC ' + d.mc_version + ')' : ''}. ` +
+                  `Actívalo para que se instale.`, 'info');
+        } catch (e) {
+          state.textContent = '';
+          showMsg('Error de red al subir.', 'err');
+          btn.disabled = false;
+        }
+      };
+
+      row.appendChild(file);
+      row.appendChild(btn);
+      row.appendChild(state);
+      return row;
+    }
+
+    function humanSize(b) {
+      if (b < 1024) return b + ' B';
+      if (b < 1048576) return (b / 1024).toFixed(0) + ' KB';
+      return (b / 1048576).toFixed(1) + ' MB';
     }
 
     function buildExtraRow(k, v) {
@@ -503,9 +602,17 @@
       const changes = {};
       box.querySelectorAll('[data-key]').forEach(el => {
         const k = el.dataset.key;
-        changes[k] = el.dataset.kind === 'bool'
-          ? (el.checked ? 'true' : 'false')
-          : el.value.trim();
+        if (el.dataset.kind === 'bool') {
+          changes[k] = el.checked ? 'true' : 'false';
+        } else if (el.dataset.kind === 'modpack') {
+          // "otra URL…" toma el valor del campo de texto de al lado
+          const custom = el.parentElement.querySelector('.custom-url');
+          changes[k] = el.value === CUSTOM
+            ? (custom ? custom.value.trim() : '')
+            : el.value.trim();
+        } else {
+          changes[k] = el.value.trim();
+        }
       });
       box.querySelectorAll('.extra-row').forEach(row => {
         const [ki, vi] = row.querySelectorAll('input');
