@@ -40,8 +40,12 @@ host, over a Unix socket shared through the `/data` bind mount. The agent
 validates the operation against a fixed list and the profile name against a
 strict regex; nothing that arrives from the browser is ever passed to a shell.
 
-Two independent secrets are needed: Basic Auth to load `/panel/`, and
-`X-Panel-Token` for every call to `/api/panel/*`.
+One login, the same upload credentials. nginx guards `/panel/` with Basic Auth
+and Flask serves the page, re-checking those credentials and baking the API
+token into the HTML. The browser then sends that token on every
+`/api/panel/*` call, so the API stays protected by a 64-char secret that
+nobody ever has to type — XHR can't be relied on to re-send Basic Auth, which
+is why the token exists at all.
 
 Creating and deleting profiles stays on the host, via `mcswitch new` and
 `mcswitch rm` — a delete wipes that profile's world, which is not something

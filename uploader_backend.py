@@ -50,6 +50,7 @@ HTPASSWD = Path("/data/.htpasswd")
 # Socket published by mcswitch-agent on the host (visible here via the /data mount)
 MCSWITCH_SOCKET = Path("/data/.mcswitch.sock")
 PANEL_TOKEN_PATH = Path("/data/.panel-token")
+PANEL_HTML = Path("/var/www/html/panel.html")
 # Whatever the browser asks for, only these three ever reach the agent.
 PANEL_OPS = {"use", "main", "stop"}
 PROFILE_RE = re.compile(r"^[a-z0-9][a-z0-9._-]{0,31}$")
@@ -279,6 +280,29 @@ def check_panel_auth() -> bool:
     expected = panel_token()
     got = request.headers.get("X-Panel-Token", "")
     return bool(expected) and hmac.compare_digest(expected, got)
+
+
+@app.route("/panel/")
+@app.route("/panel")
+def panel_page():
+    """Serve the panel with the API token baked in.
+
+    nginx already required Basic Auth to get here; we re-check the same
+    credentials so the token is never handed out on the strength of a
+    misconfigured location block alone. The person logs in once, with the
+    upload credentials, and never sees or types the token.
+    """
+    if not check_basic_auth(request.headers.get("Authorization", "")):
+        return ("unauthorized", 401,
+                {"WWW-Authenticate": 'Basic realm="Modpack Upload"'})
+    try:
+        html = PANEL_HTML.read_text(encoding="utf-8")
+    except Exception as exc:
+        log.error(f"panel page: {exc}")
+        return "panel no disponible", 500
+    html = html.replace("__PANEL_TOKEN__", panel_token())
+    return html, 200, {"Content-Type": "text/html; charset=utf-8",
+                       "Cache-Control": "no-store"}
 
 
 def agent_call(payload: dict, timeout: int = 25) -> dict:

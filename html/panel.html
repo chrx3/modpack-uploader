@@ -95,16 +95,6 @@
 
     .actions { display: flex; gap: 10px; flex-wrap: wrap; }
 
-    /* Token */
-    .gate { max-width: 420px; margin: 60px auto; text-align: center; }
-    .gate input {
-      width: 100%; padding: 12px 14px; margin: 16px 0;
-      background: var(--surface-2); border: 1px solid var(--border);
-      border-radius: 8px; color: var(--text); font-size: 14px;
-      font-family: ui-monospace, Menlo, monospace;
-    }
-    .gate input:focus { outline: none; border-color: var(--accent-2); }
-
     .msg { padding: 12px 14px; border-radius: 8px; font-size: 13px; margin-bottom: 16px; }
     .msg.err { background: #2a1215; color: var(--err); border: 1px solid #7f1d1d; }
     .msg.info { background: #0f2a20; color: var(--accent); border: 1px solid #065f46; }
@@ -127,22 +117,7 @@
   </header>
 
   <main>
-    <!-- Puerta de token -->
-    <div class="gate" id="gate">
-      <div class="card">
-        <h2>Token del panel</h2>
-        <p style="color:var(--text-dim);font-size:13px">
-          Está en el servidor, en <code>/root/modpack-data/.panel-token</code>
-        </p>
-        <input type="password" id="tokenInput" placeholder="pega el token aquí"
-               autocomplete="off" spellcheck="false">
-        <button class="primary" style="width:100%" onclick="saveToken()">Entrar</button>
-        <div id="gateErr" class="msg err hidden" style="margin-top:16px"></div>
-      </div>
-    </div>
-
-    <!-- Panel -->
-    <div id="panel" class="hidden">
+    <div id="panel">
       <div id="msg" class="msg hidden"></div>
 
       <div class="card">
@@ -188,8 +163,9 @@
   </div>
 
   <script>
-    const TOKEN_KEY = 'mc_panel_token';
-    let token = sessionStorage.getItem(TOKEN_KEY) || '';
+    // El servidor lo inyecta al servir la pagina, despues de validar el
+    // Basic Auth. Nadie tiene que escribirlo.
+    const token = '__PANEL_TOKEN__';
     let timer = null;
     let busy = false;
 
@@ -199,23 +175,6 @@
         headers: { 'X-Panel-Token': token, 'Content-Type': 'application/json',
                    ...(opts.headers || {}) },
       });
-    }
-
-    async function saveToken() {
-      const v = document.getElementById('tokenInput').value.trim();
-      if (!v) return;
-      token = v;
-      const err = document.getElementById('gateErr');
-      const r = await api('/api/panel/status');
-      if (r.status === 401) {
-        err.textContent = 'Token incorrecto.';
-        err.classList.remove('hidden');
-        return;
-      }
-      sessionStorage.setItem(TOKEN_KEY, token);
-      document.getElementById('gate').classList.add('hidden');
-      document.getElementById('panel').classList.remove('hidden');
-      refresh();
     }
 
     function showMsg(text, kind = 'info') {
@@ -301,7 +260,10 @@
     async function refresh() {
       try {
         const r = await api('/api/panel/status');
-        if (r.status === 401) { logout(); return; }
+        if (r.status === 401) {
+          showMsg('Tu sesión caducó. Recargá la página para volver a entrar.', 'err');
+          return;
+        }
         const d = await r.json();
         if (!d.ok) { showMsg(d.error || 'no se pudo leer el estado', 'err'); return; }
         render(d);
@@ -336,21 +298,7 @@
       refresh();
     }
 
-    function logout() {
-      sessionStorage.removeItem(TOKEN_KEY);
-      token = '';
-      document.getElementById('panel').classList.add('hidden');
-      document.getElementById('gate').classList.remove('hidden');
-    }
-
-    document.getElementById('tokenInput')
-      .addEventListener('keydown', e => { if (e.key === 'Enter') saveToken(); });
-
-    if (token) {
-      document.getElementById('gate').classList.add('hidden');
-      document.getElementById('panel').classList.remove('hidden');
-      refresh();
-    }
+    refresh();
   </script>
 </body>
 </html>
