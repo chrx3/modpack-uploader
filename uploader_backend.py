@@ -52,7 +52,7 @@ MCSWITCH_SOCKET = Path("/data/.mcswitch.sock")
 PANEL_TOKEN_PATH = Path("/data/.panel-token")
 PANEL_HTML = Path("/var/www/html/panel.html")
 # Whatever the browser asks for, only these three ever reach the agent.
-PANEL_OPS = {"use", "main", "stop"}
+PANEL_OPS = {"use", "main", "stop", "set"}
 PROFILE_RE = re.compile(r"^[a-z0-9][a-z0-9._-]{0,31}$")
 
 
@@ -350,11 +350,19 @@ def panel_action():
         return jsonify({"ok": False, "error": "operacion no permitida"}), 400
 
     payload = {"op": op}
-    if op == "use":
+    if op in ("use", "set"):
         profile = str(body.get("profile", ""))
         if not PROFILE_RE.match(profile):
             return jsonify({"ok": False, "error": "nombre de perfil invalido"}), 400
         payload["profile"] = profile
+
+    if op == "set":
+        changes = body.get("changes")
+        if not isinstance(changes, dict) or not changes:
+            return jsonify({"ok": False, "error": "no hay cambios"}), 400
+        # El agente revalida clave por clave; aqui solo se acota el tamano.
+        payload["changes"] = {str(k): ("" if v is None else str(v))
+                              for k, v in list(changes.items())[:60]}
 
     log.info(f"PANEL action={op} profile={payload.get('profile', '-')} "
              f"from={request.remote_addr}")

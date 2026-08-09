@@ -95,6 +95,50 @@
 
     .actions { display: flex; gap: 10px; flex-wrap: wrap; }
 
+    /* ===== Ajustes por perfil ===== */
+    .settings {
+      border: 1px solid var(--border); border-top: none;
+      border-radius: 0 0 10px 10px; padding: 18px;
+      background: var(--surface-2); margin: -10px 0 10px;
+    }
+    .settings h3 {
+      font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em;
+      color: var(--text-faint); margin: 18px 0 10px; font-weight: 600;
+    }
+    .settings h3:first-child { margin-top: 0; }
+    .grid {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+      gap: 12px;
+    }
+    .field { display: flex; flex-direction: column; gap: 5px; }
+    .field label { font-size: 12px; color: var(--text-dim); }
+    .field .hint { font-size: 11px; color: var(--text-faint); }
+    .field input[type=text], .field input[type=number], .field select {
+      padding: 8px 10px; background: var(--bg); color: var(--text);
+      border: 1px solid var(--border); border-radius: 7px;
+      font-size: 13px; font-family: inherit; width: 100%;
+    }
+    .field input:focus, .field select:focus {
+      outline: none; border-color: var(--accent-2);
+    }
+    .field.check { flex-direction: row; align-items: center; gap: 8px; }
+    .field.check input { width: 16px; height: 16px; accent-color: var(--accent-2); }
+    .field.check label { font-size: 13px; color: var(--text); }
+    .field.wide { grid-column: 1 / -1; }
+
+    .extra-row { display: flex; gap: 8px; margin-bottom: 8px; align-items: center; }
+    .extra-row input { flex: 1; }
+    .extra-row input.k { max-width: 200px; text-transform: uppercase; }
+    .extra-row button { padding: 6px 10px; }
+
+    .settings-foot {
+      display: flex; gap: 10px; align-items: center;
+      margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--border);
+      flex-wrap: wrap;
+    }
+    .settings-foot .note { font-size: 12px; color: var(--text-faint); }
+    .icon-btn { padding: 8px 12px; }
+
     .msg { padding: 12px 14px; border-radius: 8px; font-size: 13px; margin-bottom: 16px; }
     .msg.err { background: #2a1215; color: var(--err); border: 1px solid #7f1d1d; }
     .msg.info { background: #0f2a20; color: var(--accent); border: 1px solid #065f46; }
@@ -168,6 +212,10 @@
     const token = '__PANEL_TOKEN__';
     let timer = null;
     let busy = false;
+    // Perfiles con el formulario de ajustes desplegado, y el ultimo estado
+    // recibido, para poder repintar sin ir al servidor.
+    const OPEN = new Set();
+    let LAST = null;
 
     function api(path, opts = {}) {
       return fetch(path, {
@@ -185,6 +233,7 @@
     }
 
     function render(d) {
+      LAST = d;
       busy = !!(d.job && d.job.running);
 
       const dot = document.getElementById('dot');
@@ -236,12 +285,26 @@
             </div>
             <div class="desc">${escapeHtml(p.version)} · ${escapeHtml(p.type)} · ${escapeHtml(desc)}</div>
           </div>`;
+        if (!p.builtin) {
+          const gear = document.createElement('button');
+          gear.className = 'icon-btn';
+          gear.textContent = OPEN.has(p.name) ? '⚙ Cerrar' : '⚙ Ajustes';
+          gear.onclick = () => {
+            OPEN.has(p.name) ? OPEN.delete(p.name) : OPEN.add(p.name);
+            render(LAST);
+          };
+          row.appendChild(gear);
+        }
         const btn = document.createElement('button');
         btn.textContent = isActive ? 'En uso' : 'Activar';
         btn.disabled = isActive || busy;
         if (!isActive) btn.onclick = () => doAction('use', p.name);
         row.appendChild(btn);
         box.appendChild(row);
+
+        if (!p.builtin && OPEN.has(p.name)) {
+          box.appendChild(buildSettings(p, isActive));
+        }
       }
 
       document.getElementById('btnMain').disabled = busy || d.active === 'main';
@@ -249,6 +312,228 @@
 
       if (d.job && !d.job.running && d.job.op && d.job.ok === false) {
         showMsg('La última operación falló: ' + (d.job.message || ''), 'err');
+      }
+    }
+
+    // Campos que se muestran como formulario. Cualquier otra clave del perfil
+    // aparece abajo, en "otros ajustes", y se puede añadir a mano: el servidor
+    // pasa todas las claves al contenedor, asi que sirve cualquier variable
+    // que acepte la imagen itzg/minecraft-server.
+    const SCHEMA = [
+      { group: 'Servidor', fields: [
+        { k: 'VERSION', label: 'Versión de Minecraft', hint: 'p.ej. 1.21.5 o LATEST' },
+        { k: 'TYPE', label: 'Loader', type: 'select',
+          options: ['VANILLA', 'NEOFORGE', 'FABRIC', 'FORGE', 'PAPER', 'QUILT'] },
+        { k: 'MEMORY', label: 'RAM', hint: 'p.ej. 4G' },
+        { k: 'MOTD', label: 'Nombre visible', wide: true },
+        { k: 'MODPACK', label: 'Modpack (.mrpack)', type: 'modpack', wide: true,
+          hint: 'elige uno de los publicados o pega otra URL; al activar el ' +
+                'perfil se instala solo con su versión, su loader y sus mods' },
+      ]},
+      { group: 'Mundo', fields: [
+        { k: 'SEED', label: 'Semilla' },
+        { k: 'LEVEL', label: 'Carpeta del mundo', hint: 'por defecto: world' },
+        { k: 'MODE', label: 'Modo de juego', type: 'select',
+          options: ['survival', 'creative', 'adventure', 'spectator'] },
+        { k: 'DIFFICULTY', label: 'Dificultad', type: 'select',
+          options: ['peaceful', 'easy', 'normal', 'hard'] },
+        { k: 'HARDCORE', label: 'Hardcore', type: 'bool' },
+        { k: 'ALLOW_NETHER', label: 'Permitir Nether', type: 'bool' },
+      ]},
+      { group: 'Jugadores', fields: [
+        { k: 'MAX_PLAYERS', label: 'Máximo de jugadores', type: 'number' },
+        { k: 'VIEW_DISTANCE', label: 'Distancia de vista', type: 'number' },
+        { k: 'OPS', label: 'Operadores', hint: 'separados por coma' },
+        { k: 'WHITELIST', label: 'Whitelist', hint: 'separados por coma' },
+        { k: 'ENFORCE_WHITELIST', label: 'Aplicar whitelist', type: 'bool' },
+        { k: 'ONLINE_MODE', label: 'Validar cuentas de Mojang', type: 'bool' },
+      ]},
+      { group: 'Juego', fields: [
+        { k: 'PVP', label: 'PVP', type: 'bool' },
+        { k: 'ALLOW_FLIGHT', label: 'Permitir volar', type: 'bool' },
+        { k: 'ENABLE_COMMAND_BLOCK', label: 'Bloques de comandos', type: 'bool' },
+        { k: 'SPAWN_PROTECTION', label: 'Protección del spawn', type: 'number' },
+      ]},
+    ];
+    const KNOWN = new Set(SCHEMA.flatMap(g => g.fields.map(f => f.k)));
+
+    // Modpacks ya publicados en esta misma página, para elegirlos sin copiar URLs
+    const PACK_BASE = location.origin + '/files/';
+    let MODPACKS = [];
+    async function loadModpacks() {
+      try {
+        const r = await fetch('/api/status');
+        const d = await r.json();
+        // más recientes arriba: los nombres son versiones
+        MODPACKS = (d.files_ready || []).slice().sort().reverse();
+      } catch (e) {
+        MODPACKS = [];
+      }
+    }
+
+    function buildSettings(p, isActive) {
+      const cfg = p.config || {};
+      const box = document.createElement('div');
+      box.className = 'settings';
+      box.dataset.profile = p.name;
+
+      for (const g of SCHEMA) {
+        const h = document.createElement('h3');
+        h.textContent = g.group;
+        box.appendChild(h);
+        const grid = document.createElement('div');
+        grid.className = 'grid';
+        for (const f of g.fields) {
+          grid.appendChild(buildField(f, cfg[f.k] ?? ''));
+        }
+        box.appendChild(grid);
+      }
+
+      // Claves del perfil que no están en el formulario
+      const extras = Object.keys(cfg).filter(k => !KNOWN.has(k)).sort();
+      const h = document.createElement('h3');
+      h.textContent = 'Otros ajustes';
+      box.appendChild(h);
+      const extraBox = document.createElement('div');
+      extraBox.className = 'extras';
+      for (const k of extras) extraBox.appendChild(buildExtraRow(k, cfg[k]));
+      box.appendChild(extraBox);
+
+      const addBtn = document.createElement('button');
+      addBtn.textContent = '+ Añadir ajuste';
+      addBtn.onclick = () => extraBox.appendChild(buildExtraRow('', ''));
+      box.appendChild(addBtn);
+
+      const foot = document.createElement('div');
+      foot.className = 'settings-foot';
+      const save = document.createElement('button');
+      save.className = 'primary';
+      save.textContent = isActive ? 'Guardar y reiniciar' : 'Guardar';
+      save.disabled = busy;
+      save.onclick = () => saveSettings(p.name, box, isActive);
+      foot.appendChild(save);
+      const note = document.createElement('span');
+      note.className = 'note';
+      note.textContent = isActive
+        ? 'Reinicia el servidor para aplicarlo (1-2 min).'
+        : 'Se aplica la próxima vez que lo actives.';
+      foot.appendChild(note);
+      box.appendChild(foot);
+      return box;
+    }
+
+    function buildField(f, value) {
+      const wrap = document.createElement('div');
+      const isBool = f.type === 'bool';
+      wrap.className = 'field' + (isBool ? ' check' : '') + (f.wide ? ' wide' : '');
+
+      let input;
+      if (f.type === 'select') {
+        input = document.createElement('select');
+        for (const o of ['', ...f.options]) {
+          const opt = document.createElement('option');
+          opt.value = o;
+          opt.textContent = o || '(sin definir)';
+          input.appendChild(opt);
+        }
+        input.value = f.options.includes(String(value).toUpperCase()) ? String(value).toUpperCase()
+                    : (f.options.includes(String(value)) ? String(value) : '');
+      } else if (isBool) {
+        input = document.createElement('input');
+        input.type = 'checkbox';
+        input.checked = String(value).toLowerCase() === 'true';
+      } else if (f.type === 'modpack') {
+        // input + datalist: se elige de la lista publicada o se pega una URL
+        input = document.createElement('input');
+        input.type = 'text';
+        input.value = value;
+        input.placeholder = 'ninguno — versión y loader mandan';
+        const listId = 'packs-' + Math.random().toString(36).slice(2, 9);
+        input.setAttribute('list', listId);
+        const dl = document.createElement('datalist');
+        dl.id = listId;
+        for (const name of MODPACKS) {
+          const o = document.createElement('option');
+          o.value = PACK_BASE + name;
+          o.label = name;
+          dl.appendChild(o);
+        }
+        wrap.appendChild(dl);
+      } else {
+        input = document.createElement('input');
+        input.type = f.type === 'number' ? 'number' : 'text';
+        input.value = value;
+      }
+      input.dataset.key = f.k;
+      input.dataset.kind = f.type || 'text';
+
+      const label = document.createElement('label');
+      label.textContent = f.label;
+
+      if (isBool) { wrap.appendChild(input); wrap.appendChild(label); }
+      else {
+        wrap.appendChild(label);
+        wrap.appendChild(input);
+        if (f.hint) {
+          const hint = document.createElement('div');
+          hint.className = 'hint';
+          hint.textContent = f.hint;
+          wrap.appendChild(hint);
+        }
+      }
+      return wrap;
+    }
+
+    function buildExtraRow(k, v) {
+      const row = document.createElement('div');
+      row.className = 'extra-row';
+      const ki = document.createElement('input');
+      ki.type = 'text'; ki.className = 'k'; ki.value = k; ki.placeholder = 'CLAVE';
+      const vi = document.createElement('input');
+      vi.type = 'text'; vi.value = v; vi.placeholder = 'valor';
+      const del = document.createElement('button');
+      del.textContent = '✕';
+      del.title = 'quitar';
+      del.onclick = () => { vi.value = ''; row.remove(); };
+      row.appendChild(ki); row.appendChild(vi); row.appendChild(del);
+      return row;
+    }
+
+    function collectSettings(box) {
+      const changes = {};
+      box.querySelectorAll('[data-key]').forEach(el => {
+        const k = el.dataset.key;
+        changes[k] = el.dataset.kind === 'bool'
+          ? (el.checked ? 'true' : 'false')
+          : el.value.trim();
+      });
+      box.querySelectorAll('.extra-row').forEach(row => {
+        const [ki, vi] = row.querySelectorAll('input');
+        const k = ki.value.trim().toUpperCase();
+        if (k) changes[k] = vi.value.trim();
+      });
+      return changes;
+    }
+
+    async function saveSettings(profile, box, isActive) {
+      const changes = collectSettings(box);
+      showMsg('');
+      try {
+        const r = await api('/api/panel/action', {
+          method: 'POST',
+          body: JSON.stringify({ op: 'set', profile, changes }),
+        });
+        const d = await r.json();
+        if (!d.ok) { showMsg(d.error || 'no se pudo guardar', 'err'); return; }
+        if (isActive) {
+          showMsg('Guardado. Reiniciando para aplicarlo…', 'info');
+          doAction('use', profile);
+        } else {
+          showMsg(`Guardado (${d.applied.length} ajustes). Se aplica al activarlo.`, 'info');
+          refresh();
+        }
+      } catch (e) {
+        showMsg('Error de red al guardar.', 'err');
       }
     }
 
@@ -276,6 +561,10 @@
 
     function schedule() {
       clearTimeout(timer);
+      // Con un formulario abierto no se refresca solo: repintar borraria lo
+      // que la persona este escribiendo. Mientras hay un cambio en curso si,
+      // porque ahi lo que importa es ver el progreso.
+      if (OPEN.size && !busy) return;
       timer = setTimeout(refresh, busy ? 3000 : 15000);
     }
 
@@ -298,7 +587,7 @@
       refresh();
     }
 
-    refresh();
+    loadModpacks().then(refresh);
   </script>
 </body>
 </html>
