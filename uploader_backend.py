@@ -1,14 +1,21 @@
 #!/usr/bin/env python3
 """Modpack upload backend.
 
-POST /api/upload   — receives .mrpack file, saves to /data/incoming/<name>.mrpack
-GET  /upload/      — handled by nginx static (upload.html)
+POST /api/upload         — receives .mrpack file, saves to /data/incoming/<name>.mrpack
+GET  /upload/            — handled by nginx static (upload.html)
+GET  /api/panel/status   — server switch panel: current state (needs X-Panel-Token)
+POST /api/panel/action   — server switch panel: use/main/stop (needs X-Panel-Token)
+
+The panel does NOT talk to Docker. It forwards a closed set of operations to
+mcswitch-agent over a Unix socket that the host shares through /data.
 """
 import os
 import re
 import sys
 import json
+import hmac
 import shutil
+import socket
 import hashlib
 import logging
 import threading
@@ -38,6 +45,14 @@ app.config["MAX_CONTENT_LENGTH"] = 200 * 1024 * 1024  # 200 MB
 # Mark file as "seen" so the processor cron doesn't double-process
 PROCESSED_MARKER = Path("/data/.processed.json")
 HTPASSWD = Path("/data/.htpasswd")
+
+# === Server switch panel ===
+# Socket published by mcswitch-agent on the host (visible here via the /data mount)
+MCSWITCH_SOCKET = Path("/data/.mcswitch.sock")
+PANEL_TOKEN_PATH = Path("/data/.panel-token")
+# Whatever the browser asks for, only these three ever reach the agent.
+PANEL_OPS = {"use", "main", "stop"}
+PROFILE_RE = re.compile(r"^[a-z0-9][a-z0-9._-]{0,31}$")
 
 
 def check_basic_auth(header_value: str) -> bool:
@@ -250,6 +265,80 @@ def status():
         "files_ready": files,
         "processed": seen.get("files", {}),
     })
+
+
+def panel_token() -> str:
+    try:
+        return PANEL_TOKEN_PATH.read_text().strip()
+    except Exception:
+        return ""
+
+
+def check_panel_auth() -> bool:
+    """Constant-time compare of the X-Panel-Token header."""
+    expected = panel_token()
+    got = request.headers.get("X-Panel-Token", "")
+    return bool(expected) and hmac.compare_digest(expected, got)
+
+
+def agent_call(payload: dict, timeout: int = 25) -> dict:
+    """Send one JSON request to mcswitch-agent and read one JSON reply."""
+    if not MCSWITCH_SOCKET.exists():
+        raise RuntimeError("el agente mcswitch no esta disponible")
+    s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    s.settimeout(timeout)
+    try:
+        s.connect(str(MCSWITCH_SOCKET))
+        s.sendall(json.dumps(payload).encode() + b"\n")
+        buf = b""
+        while not buf.endswith(b"\n"):
+            chunk = s.recv(65536)
+            if not chunk:
+                break
+            buf += chunk
+    finally:
+        s.close()
+    if not buf:
+        raise RuntimeError("el agente no respondio")
+    return json.loads(buf.decode("utf-8"))
+
+
+@app.route("/api/panel/status")
+def panel_status():
+    if not check_panel_auth():
+        return jsonify({"ok": False, "error": "unauthorized"}), 401
+    try:
+        return jsonify(agent_call({"op": "status"}))
+    except Exception as exc:
+        log.error(f"panel status: {exc}")
+        return jsonify({"ok": False, "error": str(exc)}), 503
+
+
+@app.route("/api/panel/action", methods=["POST"])
+def panel_action():
+    if not check_panel_auth():
+        log.warning(f"REJECTED panel action from {request.remote_addr}: bad token")
+        return jsonify({"ok": False, "error": "unauthorized"}), 401
+
+    body = request.get_json(silent=True) or {}
+    op = body.get("op")
+    if op not in PANEL_OPS:
+        return jsonify({"ok": False, "error": "operacion no permitida"}), 400
+
+    payload = {"op": op}
+    if op == "use":
+        profile = str(body.get("profile", ""))
+        if not PROFILE_RE.match(profile):
+            return jsonify({"ok": False, "error": "nombre de perfil invalido"}), 400
+        payload["profile"] = profile
+
+    log.info(f"PANEL action={op} profile={payload.get('profile', '-')} "
+             f"from={request.remote_addr}")
+    try:
+        return jsonify(agent_call(payload))
+    except Exception as exc:
+        log.error(f"panel action: {exc}")
+        return jsonify({"ok": False, "error": str(exc)}), 503
 
 
 @app.route("/health")

@@ -1,0 +1,356 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ChrisCraft · Panel de servidores</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #0e0f12;
+      --surface: #18181b;
+      --surface-2: #0f1014;
+      --border: #27272a;
+      --border-hover: #3f3f46;
+      --text: #e5e7eb;
+      --text-dim: #9ca3af;
+      --text-faint: #6b7280;
+      --accent: #a7f3d0;
+      --accent-2: #10b981;
+      --warn: #fbbf24;
+      --err: #fca5a5;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg); color: var(--text);
+      min-height: 100vh; display: flex; flex-direction: column;
+    }
+    header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 18px 28px; border-bottom: 1px solid var(--border);
+    }
+    header h1 {
+      font-size: 22px; font-weight: 700; color: var(--accent);
+      display: flex; align-items: center; gap: 10px;
+    }
+    header .sub { color: var(--text-dim); margin-top: 4px; font-size: 13px; }
+    header a { color: var(--text-dim); text-decoration: none; font-size: 14px; }
+    header a:hover { color: var(--accent); }
+
+    main { flex: 1; padding: 24px 28px; max-width: 900px; width: 100%; margin: 0 auto; }
+
+    .card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 12px; padding: 20px; margin-bottom: 20px;
+    }
+    .card h2 {
+      font-size: 13px; font-weight: 600; text-transform: uppercase;
+      letter-spacing: 0.06em; color: var(--text-faint); margin-bottom: 14px;
+    }
+
+    /* Estado */
+    .live { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+    .dot { width: 10px; height: 10px; border-radius: 50%; flex: 0 0 auto; }
+    .dot.on { background: var(--accent-2); box-shadow: 0 0 10px var(--accent-2); }
+    .dot.off { background: var(--text-faint); }
+    .dot.busy { background: var(--warn); animation: pulse 1.2s infinite; }
+    @keyframes pulse { 50% { opacity: 0.25; } }
+    .live .name { font-size: 20px; font-weight: 700; }
+    .live .meta { color: var(--text-dim); font-size: 13px; }
+    .motd {
+      margin-top: 12px; padding: 10px 12px; background: var(--surface-2);
+      border-radius: 8px; font-family: ui-monospace, Menlo, monospace;
+      font-size: 12px; color: var(--text-dim); word-break: break-all;
+    }
+
+    /* Perfiles */
+    .row {
+      display: flex; align-items: center; gap: 14px;
+      padding: 14px; border: 1px solid var(--border);
+      border-radius: 10px; margin-bottom: 10px; background: var(--surface-2);
+      transition: border-color 0.15s;
+    }
+    .row:hover { border-color: var(--border-hover); }
+    .row.active { border-color: var(--accent-2); }
+    .row .info { flex: 1; min-width: 0; }
+    .row .title { font-weight: 600; display: flex; align-items: center; gap: 8px; }
+    .row .desc { color: var(--text-faint); font-size: 12px; margin-top: 3px; }
+    .tag {
+      font-size: 11px; padding: 2px 8px; border-radius: 999px;
+      background: #1f2937; color: var(--text-dim); font-weight: 600;
+    }
+    .tag.live { background: #064e3b; color: var(--accent); }
+
+    button, .btn {
+      font-family: inherit; font-size: 13px; font-weight: 600;
+      padding: 9px 16px; border-radius: 8px; cursor: pointer;
+      border: 1px solid var(--border-hover); background: transparent;
+      color: var(--text); transition: background 0.15s, opacity 0.15s;
+    }
+    button:hover:not(:disabled) { background: #27272a; }
+    button.primary { background: var(--accent-2); color: #052e16; border-color: transparent; }
+    button.primary:hover:not(:disabled) { background: #34d399; }
+    button.danger { color: var(--err); border-color: #7f1d1d; }
+    button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    .actions { display: flex; gap: 10px; flex-wrap: wrap; }
+
+    /* Token */
+    .gate { max-width: 420px; margin: 60px auto; text-align: center; }
+    .gate input {
+      width: 100%; padding: 12px 14px; margin: 16px 0;
+      background: var(--surface-2); border: 1px solid var(--border);
+      border-radius: 8px; color: var(--text); font-size: 14px;
+      font-family: ui-monospace, Menlo, monospace;
+    }
+    .gate input:focus { outline: none; border-color: var(--accent-2); }
+
+    .msg { padding: 12px 14px; border-radius: 8px; font-size: 13px; margin-bottom: 16px; }
+    .msg.err { background: #2a1215; color: var(--err); border: 1px solid #7f1d1d; }
+    .msg.info { background: #0f2a20; color: var(--accent); border: 1px solid #065f46; }
+    .hidden { display: none !important; }
+    .footer {
+      padding: 16px 28px; border-top: 1px solid var(--border);
+      color: var(--text-faint); font-size: 12px; text-align: center;
+    }
+    .footer a { color: var(--text-dim); text-decoration: none; }
+    .footer a:hover { color: var(--accent); }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <h1>🎛️ Panel de servidores</h1>
+      <div class="sub">Un servidor activo a la vez en <strong>minecraft.chrsx3.com</strong></div>
+    </div>
+    <a href="/">← Modpacks</a>
+  </header>
+
+  <main>
+    <!-- Puerta de token -->
+    <div class="gate" id="gate">
+      <div class="card">
+        <h2>Token del panel</h2>
+        <p style="color:var(--text-dim);font-size:13px">
+          Está en el servidor, en <code>/root/modpack-data/.panel-token</code>
+        </p>
+        <input type="password" id="tokenInput" placeholder="pega el token aquí"
+               autocomplete="off" spellcheck="false">
+        <button class="primary" style="width:100%" onclick="saveToken()">Entrar</button>
+        <div id="gateErr" class="msg err hidden" style="margin-top:16px"></div>
+      </div>
+    </div>
+
+    <!-- Panel -->
+    <div id="panel" class="hidden">
+      <div id="msg" class="msg hidden"></div>
+
+      <div class="card">
+        <h2>Estado actual</h2>
+        <div class="live">
+          <div class="dot off" id="dot"></div>
+          <div>
+            <div class="name" id="activeName">—</div>
+            <div class="meta" id="activeMeta"></div>
+          </div>
+        </div>
+        <div class="motd hidden" id="motd"></div>
+      </div>
+
+      <div class="card">
+        <h2>Servidores disponibles</h2>
+        <div id="profiles"></div>
+      </div>
+
+      <div class="card">
+        <h2>Acciones</h2>
+        <div class="actions">
+          <button class="primary" id="btnMain" onclick="doAction('main')">
+            🏠 Volver a ChrisCraft
+          </button>
+          <button class="danger" id="btnStop" onclick="doAction('stop')">
+            ⏹ Apagar todo
+          </button>
+          <button onclick="refresh()">↻ Actualizar</button>
+        </div>
+        <p style="color:var(--text-faint);font-size:12px;margin-top:14px">
+          Crear y borrar perfiles se hace por consola con <code>mcswitch new</code> /
+          <code>mcswitch rm</code>. El cambio se niega si hay gente conectada.
+        </p>
+      </div>
+    </div>
+  </main>
+
+  <div class="footer">
+    <a href="https://minecraft.chrsx3.com" target="_blank">🎮 Server</a> ·
+    <a href="https://discord.gg/chrsx3" target="_blank">💬 Discord</a> ·
+    <a href="/">📦 Modpacks</a>
+  </div>
+
+  <script>
+    const TOKEN_KEY = 'mc_panel_token';
+    let token = sessionStorage.getItem(TOKEN_KEY) || '';
+    let timer = null;
+    let busy = false;
+
+    function api(path, opts = {}) {
+      return fetch(path, {
+        ...opts,
+        headers: { 'X-Panel-Token': token, 'Content-Type': 'application/json',
+                   ...(opts.headers || {}) },
+      });
+    }
+
+    async function saveToken() {
+      const v = document.getElementById('tokenInput').value.trim();
+      if (!v) return;
+      token = v;
+      const err = document.getElementById('gateErr');
+      const r = await api('/api/panel/status');
+      if (r.status === 401) {
+        err.textContent = 'Token incorrecto.';
+        err.classList.remove('hidden');
+        return;
+      }
+      sessionStorage.setItem(TOKEN_KEY, token);
+      document.getElementById('gate').classList.add('hidden');
+      document.getElementById('panel').classList.remove('hidden');
+      refresh();
+    }
+
+    function showMsg(text, kind = 'info') {
+      const el = document.getElementById('msg');
+      if (!text) { el.classList.add('hidden'); return; }
+      el.textContent = text;
+      el.className = 'msg ' + kind;
+    }
+
+    function render(d) {
+      busy = !!(d.job && d.job.running);
+
+      const dot = document.getElementById('dot');
+      const name = document.getElementById('activeName');
+      const meta = document.getElementById('activeMeta');
+      const motd = document.getElementById('motd');
+
+      const activeProfile = (d.profiles || []).find(p => p.name === d.active);
+
+      if (busy) {
+        dot.className = 'dot busy';
+        name.textContent = 'Cambiando de servidor…';
+        meta.textContent = d.job.op === 'main'
+          ? 'levantando ChrisCraft'
+          : (d.job.op === 'stop' ? 'apagando' : 'levantando ' + (d.job.profile || ''));
+        motd.classList.add('hidden');
+      } else if (d.active && d.live && d.live.reachable) {
+        dot.className = 'dot on';
+        name.textContent = activeProfile ? activeProfile.label : d.active;
+        meta.textContent = `Minecraft ${d.live.version} · ${d.live.online}/${d.live.max} jugadores`;
+        if (d.live.motd) { motd.textContent = d.live.motd; motd.classList.remove('hidden'); }
+        else motd.classList.add('hidden');
+      } else if (d.active) {
+        dot.className = 'dot busy';
+        name.textContent = activeProfile ? activeProfile.label : d.active;
+        meta.textContent = 'arrancando…';
+        motd.classList.add('hidden');
+      } else {
+        dot.className = 'dot off';
+        name.textContent = 'Ningún servidor activo';
+        meta.textContent = '';
+        motd.classList.add('hidden');
+      }
+
+      const box = document.getElementById('profiles');
+      box.innerHTML = '';
+      for (const p of d.profiles || []) {
+        const isActive = p.name === d.active;
+        const row = document.createElement('div');
+        row.className = 'row' + (isActive ? ' active' : '');
+        const desc = p.modpack
+          ? 'modpack: ' + p.modpack.split('/').pop()
+          : 'mundo propio';
+        row.innerHTML = `
+          <div class="info">
+            <div class="title">
+              ${escapeHtml(p.label)}
+              ${isActive ? '<span class="tag live">activo</span>' : ''}
+            </div>
+            <div class="desc">${escapeHtml(p.version)} · ${escapeHtml(p.type)} · ${escapeHtml(desc)}</div>
+          </div>`;
+        const btn = document.createElement('button');
+        btn.textContent = isActive ? 'En uso' : 'Activar';
+        btn.disabled = isActive || busy;
+        if (!isActive) btn.onclick = () => doAction('use', p.name);
+        row.appendChild(btn);
+        box.appendChild(row);
+      }
+
+      document.getElementById('btnMain').disabled = busy || d.active === 'main';
+      document.getElementById('btnStop').disabled = busy || !d.active;
+
+      if (d.job && !d.job.running && d.job.op && d.job.ok === false) {
+        showMsg('La última operación falló: ' + (d.job.message || ''), 'err');
+      }
+    }
+
+    function escapeHtml(s) {
+      return String(s == null ? '' : s).replace(/[&<>"']/g,
+        c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    }
+
+    async function refresh() {
+      try {
+        const r = await api('/api/panel/status');
+        if (r.status === 401) { logout(); return; }
+        const d = await r.json();
+        if (!d.ok) { showMsg(d.error || 'no se pudo leer el estado', 'err'); return; }
+        render(d);
+        schedule();
+      } catch (e) {
+        showMsg('Sin conexión con el servidor.', 'err');
+        schedule();
+      }
+    }
+
+    function schedule() {
+      clearTimeout(timer);
+      timer = setTimeout(refresh, busy ? 3000 : 15000);
+    }
+
+    async function doAction(op, profile) {
+      if (op === 'stop' && !confirm('¿Apagar el servidor que esté activo?')) return;
+      showMsg('');
+      busy = true;
+      try {
+        const r = await api('/api/panel/action', {
+          method: 'POST',
+          body: JSON.stringify(profile ? { op, profile } : { op }),
+        });
+        const d = await r.json();
+        if (!d.ok) { showMsg(d.error || 'no se pudo ejecutar', 'err'); busy = false; }
+        else showMsg('Operación en curso, esto tarda entre 1 y 2 minutos.', 'info');
+      } catch (e) {
+        showMsg('Error de red.', 'err');
+        busy = false;
+      }
+      refresh();
+    }
+
+    function logout() {
+      sessionStorage.removeItem(TOKEN_KEY);
+      token = '';
+      document.getElementById('panel').classList.add('hidden');
+      document.getElementById('gate').classList.remove('hidden');
+    }
+
+    document.getElementById('tokenInput')
+      .addEventListener('keydown', e => { if (e.key === 'Enter') saveToken(); });
+
+    if (token) {
+      document.getElementById('gate').classList.add('hidden');
+      document.getElementById('panel').classList.remove('hidden');
+      refresh();
+    }
+  </script>
+</body>
+</html>
