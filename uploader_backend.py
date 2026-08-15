@@ -51,6 +51,7 @@ HTPASSWD = Path("/data/.htpasswd")
 MCSWITCH_SOCKET = Path("/data/.mcswitch.sock")
 PANEL_TOKEN_PATH = Path("/data/.panel-token")
 PANEL_HTML = Path("/var/www/html/panel.html")
+PANEL_UPLOAD_HTML = Path("/var/www/html/panel-upload.html")
 # Whatever the browser asks for, only these three ever reach the agent.
 PANEL_OPS = {"use", "main", "stop", "set"}
 PROFILE_RE = re.compile(r"^[a-z0-9][a-z0-9._-]{0,31}$")
@@ -282,10 +283,8 @@ def check_panel_auth() -> bool:
     return bool(expected) and hmac.compare_digest(expected, got)
 
 
-@app.route("/panel/")
-@app.route("/panel")
-def panel_page():
-    """Serve the panel with the API token baked in.
+def _serve_panel_html(path):
+    """Serve a panel HTML file with the API token baked in.
 
     nginx already required Basic Auth to get here; we re-check the same
     credentials so the token is never handed out on the strength of a
@@ -296,13 +295,25 @@ def panel_page():
         return ("unauthorized", 401,
                 {"WWW-Authenticate": 'Basic realm="Modpack Upload"'})
     try:
-        html = PANEL_HTML.read_text(encoding="utf-8")
+        html = path.read_text(encoding="utf-8")
     except Exception as exc:
-        log.error(f"panel page: {exc}")
-        return "panel no disponible", 500
+        log.error(f"serve panel html {path}: {exc}")
+        return "no disponible", 500
     html = html.replace("__PANEL_TOKEN__", panel_token())
     return html, 200, {"Content-Type": "text/html; charset=utf-8",
                        "Cache-Control": "no-store"}
+
+
+@app.route("/panel/")
+@app.route("/panel")
+def panel_page():
+    return _serve_panel_html(PANEL_HTML)
+
+
+@app.route("/panel/upload")
+@app.route("/panel/upload/")
+def panel_upload_page():
+    return _serve_panel_html(PANEL_UPLOAD_HTML)
 
 
 def agent_call(payload: dict, timeout: int = 25) -> dict:

@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Subir modpack al lab · ChrisCraft</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #0e0f12; color: #e5e7eb;
+      min-height: 100vh; display: flex; flex-direction: column;
+      align-items: center; padding: 32px 16px;
+    }
+    .wrap { width: 100%; max-width: 560px; }
+    header { text-align: center; margin-bottom: 24px; }
+    h1 { font-size: 24px; color: #a7f3d0; }
+    .sub { color: #9ca3af; margin-top: 6px; font-size: 13px; }
+
+    .card {
+      background: #18181b; border: 1px solid #27272a; border-radius: 10px;
+      padding: 16px; margin-bottom: 16px;
+    }
+    .card label {
+      display: block; font-size: 12px; color: #9ca3af;
+      text-transform: uppercase; letter-spacing: .05em; margin-bottom: 6px;
+    }
+    .card select {
+      width: 100%; padding: 9px 12px;
+      background: #0f1014; border: 1px solid #27272a; border-radius: 6px;
+      color: #e5e7eb; font-size: 14px; font-family: inherit;
+    }
+    .card select:focus { outline: none; border-color: #10b981; }
+    .card .target-hint { font-size: 12px; color: #6b7280; margin-top: 10px; }
+
+    .drop {
+      background: #18181b; border: 2px dashed #3f3f46; border-radius: 12px;
+      padding: 48px 24px; text-align: center; transition: all 0.15s;
+      cursor: pointer; display: block;
+    }
+    .drop.disabled { opacity: 0.5; cursor: not-allowed; }
+    .drop.drag { border-color: #10b981; background: #0f2d24; }
+    .drop .icon { font-size: 48px; margin-bottom: 8px; }
+    .drop .hint { color: #9ca3af; font-size: 14px; }
+    .drop strong { color: #e5e7eb; }
+    input[type=file] { display: none; }
+
+    .status { margin-top: 20px; padding: 16px; border-radius: 8px; font-size: 14px; line-height: 1.5; }
+    .status.ok { background: #064e3b; color: #d1fae5; }
+    .status.err { background: #7f1d1d; color: #fee2e2; }
+    .progress {
+      height: 6px; background: #27272a; border-radius: 3px;
+      margin-top: 10px; overflow: hidden; position: relative;
+    }
+    .progress > div { height: 100%; background: #10b981; width: 0; transition: width 0.2s; }
+    .progress-label {
+      display: flex; justify-content: space-between;
+      font-size: 11px; color: #9ca3af; margin-top: 6px;
+      font-variant-numeric: tabular-nums;
+    }
+    .back { display: block; text-align: center; margin-top: 20px; color: #9ca3af; }
+    code { background: #27272a; padding: 2px 6px; border-radius: 4px; font-size: 12px; }
+    a { color: #a7f3d0; }
+    .btn {
+      display: inline-block; margin-top: 14px; padding: 9px 16px;
+      background: #10b981; color: #052e16; border: none; border-radius: 8px;
+      font-family: inherit; font-size: 13px; font-weight: 700; cursor: pointer;
+      text-decoration: none;
+    }
+    .btn:hover { background: #34d399; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>⬆️ Subir modpack al lab</h1>
+      <div class="sub">Arrastrá tu archivo <code>.mrpack</code> o hacé click</div>
+    </header>
+
+    <div class="card">
+      <label for="profile">Servidor de destino</label>
+      <select id="profile"></select>
+      <div class="target-hint" id="targetHint">
+        El modpack se guarda y se asigna a este perfil. Se instala (versión,
+        loader y mods) la próxima vez que lo actives desde el panel.
+      </div>
+    </div>
+
+    <label class="drop disabled" id="drop">
+      <div class="icon">📦</div>
+      <div><strong>Elegí un archivo</strong> o soltalo acá</div>
+      <div class="hint" style="margin-top:8px;">.mrpack · máximo 200 MB</div>
+      <input type="file" id="file" accept=".mrpack,.zip">
+    </label>
+
+    <div id="status"></div>
+
+    <a class="back" href="/panel/">← Volver al panel</a>
+  </div>
+
+  <script>
+    // Inyectado por el servidor tras validar el login; nadie lo escribe.
+    const token = '__PANEL_TOKEN__';
+    const drop = document.getElementById('drop');
+    const input = document.getElementById('file');
+    const status = document.getElementById('status');
+    const profileSel = document.getElementById('profile');
+
+    // Solo perfiles del lab: al principal se sube por /upload/ (pipeline aparte)
+    async function loadProfiles() {
+      try {
+        const r = await fetch('/api/panel/status', { headers: { 'X-Panel-Token': token } });
+        const d = await r.json();
+        const labs = (d.profiles || []).filter(p => !p.builtin);
+        profileSel.innerHTML = '';
+        if (!labs.length) {
+          const o = document.createElement('option');
+          o.textContent = 'no hay perfiles de lab — creá uno con mcswitch new';
+          o.disabled = true;
+          profileSel.appendChild(o);
+          drop.classList.add('disabled');
+          return;
+        }
+        for (const p of labs) {
+          const o = document.createElement('option');
+          o.value = p.name;
+          o.textContent = p.label + '  (' + p.version + ' · ' + p.type + ')';
+          profileSel.appendChild(o);
+        }
+        drop.classList.remove('disabled');
+      } catch (e) {
+        drop.classList.add('disabled');
+        status.innerHTML = `<div class="status err">❌ no se pudo cargar la lista de servidores</div>`;
+      }
+    }
+
+    ['dragenter', 'dragover'].forEach(e =>
+      drop.addEventListener(e, ev => { ev.preventDefault(); if (!drop.classList.contains('disabled')) drop.classList.add('drag'); }));
+    ['dragleave', 'drop'].forEach(e =>
+      drop.addEventListener(e, ev => { ev.preventDefault(); drop.classList.remove('drag'); }));
+
+    drop.addEventListener('drop', ev => {
+      if (drop.classList.contains('disabled')) return;
+      const f = ev.dataTransfer.files[0];
+      if (f) upload(f);
+    });
+    input.addEventListener('change', () => {
+      if (drop.classList.contains('disabled')) { input.value = ''; return; }
+      if (input.files[0]) upload(input.files[0]);
+    });
+
+    let startedAt = 0;
+    function upload(file) {
+      const profile = profileSel.value;
+      if (!profile) return;
+      startedAt = Date.now();
+      status.innerHTML = `
+        <div class="status"><strong>${escapeHtml(file.name)}</strong> · ${(file.size/1024/1024).toFixed(2)} MB → ${escapeHtml(profile)}
+        <div class="progress"><div id="bar"></div></div>
+        <div class="progress-label"><span id="pct">0%</span><span id="rate">—</span></div>
+        </div>`;
+      const bar = document.getElementById('bar');
+      const pct = document.getElementById('pct');
+      const rate = document.getElementById('rate');
+
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', '/api/panel/upload');
+      xhr.setRequestHeader('X-Panel-Token', token);
+
+      xhr.upload.onprogress = e => {
+        if (e.lengthComputable) {
+          const p = Math.round(e.loaded/e.total*100);
+          bar.style.width = p + '%';
+          pct.textContent = p + '%';
+          const elapsed = (Date.now() - startedAt) / 1000;
+          if (elapsed > 0.3) {
+            const mbps = (e.loaded / 1024 / 1024) / elapsed;
+            const remaining = e.total - e.loaded;
+            const eta = mbps > 0.1 ? Math.round(remaining / 1024 / 1024 / mbps) : null;
+            rate.textContent = mbps.toFixed(1) + ' MB/s' + (eta !== null ? ' · ~' + eta + 's' : '');
+          }
+        }
+      };
+      xhr.onload = () => {
+        try {
+          const r = JSON.parse(xhr.responseText);
+          if (r.ok) {
+            status.innerHTML = `<div class="status ok">
+              ✅ Subido <strong>${escapeHtml(r.filename)}</strong> a <strong>${escapeHtml(profile)}</strong>
+              <br>Tamaño: ${(r.size/1024/1024).toFixed(2)} MB
+              ${r.mc_version ? `<br>MC: <code>${escapeHtml(r.mc_version)}</code>` : ''}
+              <br><br>Ya quedó asignado al perfil. Activalo desde el panel para instalarlo.
+              <br><a class="btn" href="/panel/">Ir al panel →</a>
+            </div>`;
+            loadProfiles();
+          } else {
+            status.innerHTML = `<div class="status err">❌ ${escapeHtml(r.error || 'error desconocido')}</div>`;
+          }
+        } catch (e) {
+          status.innerHTML = `<div class="status err">❌ respuesta inválida: ${escapeHtml(xhr.responseText.slice(0,200))}</div>`;
+        }
+      };
+      xhr.onerror = () => {
+        status.innerHTML = `<div class="status err">❌ error de red</div>`;
+      };
+
+      const fd = new FormData();
+      fd.append('profile', profile);
+      fd.append('file', file);
+      xhr.send(fd);
+    }
+
+    function escapeHtml(s) {
+      return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    }
+
+    loadProfiles();
+  </script>
+</body>
+</html>
